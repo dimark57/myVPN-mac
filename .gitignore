@@ -1,0 +1,16 @@
+.DS_Store
+.backlog/.local/
+*.sqlite
+*.conf
+.env
+secrets/
+
+# Xcode / local builds
+macos/MyVPN/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+macos/MyVPN/MyVPN.xcodeproj/project.xcworkspace/
+
+# Local generated / logs accidentally under repo
+*.log
+sing-box.pid

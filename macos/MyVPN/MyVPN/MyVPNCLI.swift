@@ -83,8 +83,12 @@ enum MyVPNCLI {
         throw HelperError.notInstalled
     }
 
-    static func mountNAS() throws {
-        let result = try run(["mount-nas"], timeout: 120)
+    static func mountNAS(force: Bool = false) throws {
+        var args = ["mount-nas"]
+        if force {
+            args.append("--force")
+        }
+        let result = try run(args, timeout: 120)
         if result.status != 0 {
             throw MyVPNCLIError.failed(command: "mount-nas", exitCode: result.status, stderr: result.stderr + result.stdout)
         }

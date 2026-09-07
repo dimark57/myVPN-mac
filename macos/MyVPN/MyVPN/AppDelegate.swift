@@ -311,7 +311,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     private func turnOn() {
-        runCommand(key: "up", work: "Включаю VPN…") { try MyVPNCLI.up() }
+        runCommand(key: "up", work: "Включаю VPN…") {
+            try MyVPNCLI.up()
+            // Helper up bypasses `myvpn up` CLI remount hook — remount here on VPN-up trigger.
+            if MyVPNCLI.autoNASEnabled() {
+                try? MyVPNCLI.mountNAS(force: true)
+            }
+        }
     }
 
     private func turnOff() {
@@ -374,7 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do {
                 try MyVPNCLI.up()
                 if MyVPNCLI.autoNASEnabled() {
-                    try? MyVPNCLI.mountNAS()
+                    try? MyVPNCLI.mountNAS(force: true)
                 }
                 DispatchQueue.main.async {
                     self?.busyKey = nil

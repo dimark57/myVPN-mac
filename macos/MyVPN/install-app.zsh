@@ -20,12 +20,13 @@ cp -R "${DERIVED}/Build/Products/Release/myVPN.app" "${DEST}"
 RES="${DEST}/Contents/Resources"
 mkdir -p "${RES}/runtime/bin" "${RES}/runtime/lib" "${RES}/runtime/share" "${RES}/helper"
 
-if [[ -d "${LOCAL_RUNTIME}/bin" ]]; then
-  SRC="${LOCAL_RUNTIME}"
-elif [[ -d "${REPO}/bin" ]]; then
+# Prefer workspace when complete; else fall back to previous local install.
+if [[ -x "${REPO}/bin/myvpn" && -f "${REPO}/lib/nas.zsh" && -f "${REPO}/lib/process.zsh" ]]; then
   SRC="${REPO}"
+elif [[ -d "${LOCAL_RUNTIME}/bin" ]]; then
+  SRC="${LOCAL_RUNTIME}"
 else
-  print -r -- "no runtime source at ${LOCAL_RUNTIME} or ${REPO}" >&2
+  print -r -- "no runtime source at ${REPO} or ${LOCAL_RUNTIME}" >&2
   exit 1
 fi
 

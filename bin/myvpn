@@ -13,9 +13,10 @@ usage() {
 myvpn — Mac split-tunnel (sing-box)
 
   myvpn up | down | status | update-rules | mount-nas | install-autostart
+  myvpn mount-nas [--force]           # remount if stale; --force always
   myvpn uninstall-autostart
   myvpn autostart [on|off|status]     # flag + menu bar Login Item (не zsh LaunchAgent)
-  myvpn auto-nas [on|off|status]      # mount-nas during login-boot / app launch
+  myvpn auto-nas [on|off|status]      # remount NAS after vpn up / login-boot
   myvpn helper-status                 # privileged helper socket
   myvpn flush-dns    # clear mDNSResponder (Hub 403 after stale 94…)
   myvpn login-boot   # legacy LaunchAgent (prefer app + helper)
@@ -160,14 +161,6 @@ cmd_autostart() {
   esac
 }
 
-myvpn_auto_nas_flag() {
-  print -r -- "${MYVPN_HOME}/auto-mount-nas"
-}
-
-myvpn_auto_nas_enabled() {
-  [[ -f "$(myvpn_auto_nas_flag)" ]]
-}
-
 cmd_auto_nas() {
   local mode="${1:-status}" flag
   flag="$(myvpn_auto_nas_flag)"
@@ -211,7 +204,9 @@ cmd_login_boot() {
     fi
     /bin/sleep 2
   done
-  if ! myvpn_is_running; then
+  local was_up=0
+  myvpn_is_running && was_up=1
+  if (( was_up == 0 )); then
     myvpn_cmd_up || true
   fi
   /bin/sleep 2
@@ -222,7 +217,12 @@ cmd_login_boot() {
     /usr/bin/touch "${MYVPN_HOME}/.auto-mount-nas-initialized"
   fi
   if myvpn_auto_nas_enabled; then
-    myvpn_cmd_mount_nas || true
+    # Fresh VPN start → force remount (stale smbfs after sleep/reboot).
+    if (( was_up == 0 )); then
+      myvpn_cmd_mount_nas --force || true
+    else
+      myvpn_cmd_mount_nas || true
+    fi
   else
     print -r -- "auto-nas off — skip mount"
   fi
@@ -251,11 +251,20 @@ main() {
   shift || true
   case "$cmd" in
     up)
+      local was_up=0 up_rc=0
+      myvpn_is_running && was_up=1
       if [[ "$(/usr/bin/id -u)" != "0" ]] && myvpn_helper_available; then
         myvpn_via_helper up
+        up_rc=$?
       else
         myvpn_cmd_up "$@"
+        up_rc=$?
       fi
+      # Menu bar uses helper socket directly — same remount also in AppDelegate.turnOn.
+      if (( up_rc == 0 && was_up == 0 )); then
+        myvpn_after_up_remount_nas
+      fi
+      return "${up_rc}"
       ;;
     down)
       if [[ "$(/usr/bin/id -u)" != "0" ]] && myvpn_helper_available; then
