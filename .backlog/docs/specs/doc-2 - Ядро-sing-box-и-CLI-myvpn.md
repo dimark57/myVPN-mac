@@ -3,7 +3,7 @@ id: doc-2
 title: Ядро sing-box и CLI myvpn
 type: specification
 created_date: '2026-09-07 12:55'
-updated_date: '2026-09-07 13:36'
+updated_date: '2026-09-07 17:35'
 ---
 # Ядро sing-box и CLI myvpn
 
@@ -37,7 +37,7 @@ updated_date: '2026-09-07 13:36'
 - Один экземпляр (pid-файл). Повторный `up` без `down` — ошибка или явный restart.
 - Перед `up`: остановить Connected-туннели WireGuard.app (`scutil --nc stop`).
 - Привилегия: один запрос admin на `up`. Если через AppleScript: **heredoc** + `json.dumps(..., ensure_ascii=False)`; без вложенных кавычек в командах (`pkill -f …`).
-- `down`: SIGTERM по pid, TUN снимается; **не** вызывать `networksetup -setdnsservers`.
+- `down`: SIGTERM по pid, TUN снимается; системный DNS сервисов из `MYVPN_DNS_SERVICES` возвращается в `Empty` (см. § DNS).
 
 ## Маршруты (TUN)
 
@@ -52,11 +52,13 @@ Healthcheck пиров **не** в v0. Home down не валит интерне�
 
 ## DNS
 
-Только внутри sing-box (hijack с TUN). Не Fake-IP. **Не** брать `DNS=` из `macbook.conf` / `home.conf` в system DNS.
+Внутри sing-box — hijack с TUN. Не Fake-IP. **Не** брать `DNS=` из `macbook.conf` / `home.conf` в system DNS.
 
-Имена домашнего контура (`backlog.digials.com`, `ocode.digials.com`, …) должны резолвиться в **`10.57.0.100`** (CoreDNS на NAS), чтобы трафик шёл в Home-сетку, а не hairpin на WAN `94…` (Caddy: `403 VPN / LAN only`).
+Чтобы digials не уходили в LAN DHCP / DoH → hairpin `94…` (Hub 403), на **перечисленных** Network Services (`MYVPN_DNS_SERVICES`, по умолчанию `Wi-Fi`) при `up` выставляется `networksetup -setdnsservers <service> ${MYVPN_TUN_DNS}` (`172.19.0.1`). При `down` — `Empty` на тех же сервисах. Вызовы **таймаутятся** (stale USB hang). Это **не** «DNS= из WG conf на все сервисы» и не brew `wg-quick`.
 
-RU-имена — так, чтобы попадали в direct; остальной резолв — через MacBook.
+Имена домашнего контура (`backlog.digials.com`, `ocode.digials.com`, …) → **`10.57.0.100`** (CoreDNS на NAS).
+
+RU-имена — direct; остальной резолв — через MacBook.
 
 ## Списки RU
 
@@ -67,29 +69,27 @@ Direct: `category-ru-whitelist` (или `category-ru`, если whitelist нет
 ## CLI
 
 ```
-myvpn up | down | status | update-rules | mount-nas | install-autostart
+myvpn up | down | status | update-rules | mount-nas [--force]
+myvpn install-autostart | uninstall-autostart
+myvpn autostart | auto-nas | helper-status | flush-dns | render
 ```
 
-Exit 0 / ≠0. `status`: tun / macbook / home / nas-mount / публичный IPv4 (один URL, таймаут; сбой IP не роняет весь status). Ошибки: нет conf, нет sing-box, нет прав, уже up — stderr.
+Exit 0 / ≠0. `status`: `tun=` / `macbook=` / `home=` / `nas=` / `ip=` (сбой IP не роняет весь status). Ошибки: нет conf, нет sing-box, нет прав, уже up — stderr.
 
 Публичный IP после `up` = выход MacBook (`77…`), не домашний WAN.
 
-`mount-nas` — SMB `//NAS@10.57.0.100/Nas` → `/Volumes/Nas` (пароль из Keychain, не из git).  
-`install-autostart` — LaunchAgent + запись SMB-учётки в Keychain (один раз).
-
-
-
+`mount-nas` — SMB `//NAS@10.57.0.100/Nas` → `/Volumes/Nas` (пароль из Keychain). `--force` — всегда remount (после VPN up / stale smbfs).  
+`install-autostart` — Keychain SMB + флаги; основной UI-автозапуск — **menu bar Login Item** (**doc-4**), не zsh LaunchAgent.
 
 ## Автозапуск (логин / перезагрузка)
 
 Замена ручного `gv → macbook+home` после reboot.
 
-1. `myvpn install-autostart` ставит LaunchAgent `local.myvpn.mac.login` (RunAtLoad + сеть).
-2. После логина агент ждёт сетевой интерфейс → `myvpn up` (схема MacBook+Home в одном ядре) → ждёт `10.57.0.100` → `myvpn mount-nas`.
-3. Privileges для TUN: один запрос admin после логина допустим в v0; privileged helper — не блокер v0, можно позже.
-4. `myvpn down` не обязан размонтировать `/Volumes/Nas` (чтобы Cursor не терял файлы); отдельный `umount` — вручную или флаг позже.
+1. Канон v0: **myVPN.app** как SMAppService login item + privileged helper; при старте — optional auto-up и auto-NAS (`mount-nas --force` после свежего up).
+2. Legacy `login-boot` / LaunchAgent `local.myvpn.mac.login` — только запасной путь; не основной.
+3. `myvpn down` не обязан размонтировать `/Volumes/Nas`.
 
-Не поднимать brew `wg-quick` из LaunchAgent.
+Не поднимать brew `wg-quick` из автозапуска.
 
 ## Автомонтирование NAS
 
@@ -111,10 +111,10 @@ Exit 0 / ≠0. `status`: tun / macbook / home / nas-mount / публичный I
 
 ```
 bin/myvpn
-lib/
-share/sing-box.json.template
-share/launchagents/local.myvpn.mac.login.plist
-tests/   # фикстуры .conf; cycle-myvpn.zsh (см. doc-6)
+lib/          # env, process, nas, render_config, parse_conf, update_rules, …
+macos/MyVPN/  # menu bar + helper (doc-4)
+share/        # опциональные шаблоны; JSON генерирует render_config.py
+tests/        # static-check + фикстуры (doc-6)
 ```
 
 ## Приёмка этапа
@@ -125,7 +125,7 @@ tests/   # фикстуры .conf; cycle-myvpn.zsh (см. doc-6)
 
 Чат ([Почему гаснет macbook+home](07daca87-99a5-4c9a-8b31-a896cff7a373)); эталон цикла: `cycle-macbook-home.zsh` → PASS.
 
-1. **Не два `wg-quick`.** Один sing-box. Запрещены Darwin `route -n monitor` ×2 и `networksetup -setdnsservers` на все сервисы.
+1. **Не два `wg-quick`.** Один sing-box. Запрещены Darwin `route -n monitor` ×2 и массовый `networksetup -setdnsservers` «как wg-quick на все сервисы». Узкий TUN-DNS на `MYVPN_DNS_SERVICES` — разрешён (см. § DNS).
 2. **`status` не AND.** tun / macbook / home по отдельности.
 3. **Сон / Power Nap / USB-flap.** После wake — живое ядро или честный down; без orphan процессов.
 4. **DNS vs hairpin.** `94…/32` — direct только как WG endpoint. Сервисы Hub — по `10.57.0.100` (DNS в ядре). Не тащить `94…` в «внутренние сервисы».

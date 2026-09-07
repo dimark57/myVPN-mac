@@ -7,7 +7,7 @@ Mac: `/Volumes/Nas/Project/myVPN-mac/`
 
 ## Документация
 
-`.backlog/docs/` — спеки. Канон MVP: `.backlog/docs/specs/doc-1 - Mac-клиент-split-tunnel.md`
+`.backlog/docs/` — спеки. Канон MVP: `.backlog/docs/specs/doc-1 - Mac-клиент-split-tunnel-создание.md`
 
 ## Задачи
 

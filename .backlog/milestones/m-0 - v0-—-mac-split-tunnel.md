@@ -7,6 +7,8 @@ title: "v0 — Mac split-tunnel"
 
 Горизонт поставки личного Mac-клиента вместо brew wg-quick.
 
-В объёме волны: спецификации этапов (ядро+CLI, контракт Alfred gv, menu bar, Network Extension) и после подписи — реализация CLI в этом репо.
+**Сделано в волне:** спеки doc-1…7 (тела), CLI + menu bar + privileged helper (MYMAC-1…9 Done).
 
-Не в объёме волны как код: you2vpn (BACK-*), Happ, App Store. Код Alfred/Utilits — другой дом (после контракта CLI).
+**Вне кода этой волны:** Alfred/Utilits (doc-3 контракт готов), you2vpn (BACK-*), Happ, App Store.
+
+**Следующее (не блокер личного v0):** Network Extension (**doc-5**), живой `tests/cycle-myvpn.zsh`, повторная webauthn-подпись обновлённых спек.

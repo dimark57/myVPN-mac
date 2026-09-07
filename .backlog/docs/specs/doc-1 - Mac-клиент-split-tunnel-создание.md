@@ -67,7 +67,7 @@ updated_date: '2026-09-07 13:00'
 | Правила РФ | geosite + geoip (GitHub, обновление командой `myvpn update-rules`) |
 | Alfred | Utilits `gv` → CLI |
 
-TUN в MVP: sudo или privileged helper. Без `networksetup -setdnsservers` на все Network Services.
+TUN в MVP: sudo или privileged helper. Без массового `networksetup` «как wg-quick»; узкий TUN-DNS на выбранные сервисы — см. **doc-2**.
 
 ---
 
@@ -79,7 +79,7 @@ sing-box читает:
 2. Правило: `geoip:ru` + выбранные `geosite` → `direct`.
 3. Правило: `10.13.13.0/24`, `10.57.0.0/24` → outbound `home`.
 4. Default → outbound `macbook`.
-5. DNS: российские имена — резолв так, чтобы попадали в direct; остальное — через MacBook. Не подменять системный список DNS через `networksetup`.
+5. DNS: российские имена — в direct; остальное — через MacBook. Узкий TUN-DNS на выбранные Network Services — **doc-2** (не wg-quick-style на все сервисы).
 
 Список RU не копировать в AllowedIPs WG. Маршрутизация только в sing-box.
 

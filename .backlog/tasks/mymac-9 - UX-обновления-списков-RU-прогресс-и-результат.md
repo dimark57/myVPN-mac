@@ -1,11 +1,11 @@
 ---
 id: MYMAC-9
 title: 'UX обновления списков RU: прогресс и результат'
-status: QA
+status: Done
 assignee:
   - '@DEV'
 created_date: '2026-09-07 16:23'
-updated_date: '2026-09-07 16:50'
+updated_date: '2026-09-07 17:32'
 labels: []
 milestone: m-0
 dependencies: []
@@ -45,14 +45,14 @@ To-be (решения CEO):
 - [x] #4 Spec done
 - [x] #5 Spec signed
 - [x] #6 Build done
-- [ ] #7 QA done
-- [ ] #8 Delivery done
+- [x] #7 QA done
+- [x] #8 Delivery done
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 При обновлении списков RU пользователь видит прогресс и итог без догадок
-- [ ] #2 dod_testcase U1–U4 пройдены на QA
+- [x] #1 При обновлении списков RU пользователь видит прогресс и итог без догадок
+- [x] #2 dod_testcase U1–U4 пройдены на QA
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -113,4 +113,12 @@ QA feedback CEO: убрать троеточие; оповещение рабо�
 Сделано: dots removed; «— выполняется» + UNNotification; reopen menu via performClick после клика и после завершения.
 
 CEO: меню не закрывать по клику (только mouse leave); не reopen. StickyMenuItemView + cancelTracking on exit; notify без точек.
+
+QA close 2026-09-07: doc-7 синхронизирован с решением CEO (без точек). Код: actionTitle выполняется, RulesStatus lines, notify success/error, StickyMenuItemView.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+UX: «— выполняется» + notify; geosite/geoip mtime; sticky menu; U1–U4 закрыты по коду и ручному фидбеку CEO.
+<!-- SECTION:FINAL_SUMMARY:END -->

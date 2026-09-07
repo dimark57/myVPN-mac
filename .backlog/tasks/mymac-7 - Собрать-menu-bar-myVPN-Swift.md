@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@DEV'
 created_date: '2026-09-07 15:02'
-updated_date: '2026-09-07 16:12'
+updated_date: '2026-09-07 17:32'
 labels: []
 milestone: m-0
 dependencies: []
@@ -33,7 +33,7 @@ type: feature
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Локально собирается в Xcode и управляет тем же CLI
+- [x] #1 Локально собирается в Xcode и управляет тем же CLI
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -50,6 +50,8 @@ type: feature
 
 <!-- SECTION:NOTES:BEGIN -->
 Код в macos/MyVPN; xcodebuild Debug BUILD SUCCEEDED (DerivedData локально). Открыть MyVPN.xcodeproj → Run. Ждёт ручной прогон On/Off.
+
+DoD close 2026-09-07: xcodebuild + install-app → ~/Applications/myVPN.app; On/Off через helper.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -3,7 +3,7 @@ id: doc-6
 title: Тестирование CLI myvpn
 type: specification
 created_date: '2026-09-07 13:00'
-updated_date: '2026-09-07 13:36'
+updated_date: '2026-09-07 17:35'
 ---
 # Тестирование CLI myvpn
 
@@ -60,7 +60,7 @@ updated_date: '2026-09-07 13:36'
 |----|----------|
 | S1 | `sing-box check` / валидный JSON из фикстур |
 | S2 | WG в JSON — `endpoints[]`, не outbound wireguard |
-| S3 | В скриптах нет `networksetup -setdnsservers` |
+| S3 | Нет массового `networksetup -setdnsservers` на все сервисы / DNS= из WG; разрешён только TUN-DNS на `MYVPN_DNS_SERVICES` + clear на `down` |
 | S4 | Нет Darwin `route -n monitor` и brew `wg-quick` как ядра |
 | S5 | Ключи не в git, не в лог-шаблоне, `.conf` в gitignore |
 | S6 | IPv6 в TUN/маршрутах выключен |
@@ -75,7 +75,7 @@ updated_date: '2026-09-07 13:36'
 | S15 | `update-rules` кладёт dat в `~/.config/myvpn/` |
 | S16 | Парсер игнорирует `DNS=` из `.conf` (не пишет в JSON как system DNS) |
 | S17 | Admin/osascript (если есть): heredoc + `ensure_ascii=False`; без вложенных кавычек в pkill |
-| S18 | LaunchAgent plist в репо; `install-autostart` не кладёт пароль в файлы репо |
+| S18 | Автозапуск: канон = app Login Item + helper; legacy LaunchAgent не обязателен в репо; пароль SMB не в файлах репо |
 | S19 | `mount-nas` читает пароль только из Keychain (`local.myvpn.mac.nas` / `NAS`) |
 | S20 | В коде/логах нет plaintext SMB password |
 
@@ -89,7 +89,7 @@ updated_date: '2026-09-07 13:36'
 | C2 | `iface` после `myvpn up` | ядро/TUN up; Home-сетки достижимы |
 | C3 | `dns_backlog` | `dig +short backlog.digials.com` → `10.57.0.100` |
 | C4 | `dns_ocode` | `ocode.digials.com` → `10.57.0.100` |
-| C5 | `dns_system` | `networksetup -getdnsservers` **не** стал `1.1.1.1` из-за ядра; предпочтительно без изменения сервисов (см. doc-2) |
+| C5 | `dns_system` | после up сервисы из `MYVPN_DNS_SERVICES` указывают на `MYVPN_TUN_DNS` (не `1.1.1.1` из WG conf); после down — Empty / DHCP |
 | C6 | `hub_http` | `https://backlog.digials.com/` → **200** |
 | C7 | `ocode_http` | 200 или 3xx |
 | C8 | `public_ip_macbook` | IPv4 выход MacBook (`77…`), не `94…` |
@@ -104,7 +104,7 @@ updated_date: '2026-09-07 13:36'
 
 | ID | Проверка |
 |----|----------|
-| L1 | Системный DNS сервисов до/после up/down: ядро **не** зовёт `networksetup -setdnsservers` |
+| L1 | Системный DNS: up → TUN DNS на `MYVPN_DNS_SERVICES`; down → Empty; без копирования `DNS=` из `.conf` |
 | L2 | = C8 |
 | L3 | = C9 + C10 |
 | L4 | `ya.ru` (geoip:ru) не в utun MacBook |
@@ -120,7 +120,7 @@ updated_date: '2026-09-07 13:36'
 
 | ID | Кто | Проверка |
 |----|-----|----------|
-| R1 | ИИ | нет `networksetup -setdnsservers` |
+| R1 | ИИ | нет wg-quick-style массового DNS; TUN-DNS только на allowlist сервисов (doc-2) |
 | R2 | ИИ | status не AND двух пиров |
 | R3 | ИИ | нет orphan после второго up |
 | R4 | Человек | sleep → wake |

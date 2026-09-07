@@ -1,11 +1,11 @@
 ---
 id: MYMAC-8
 title: 'Упаковать myVPN.app: runtime внутри + helper без пароля на up'
-status: QA
+status: Done
 assignee:
   - '@DEV'
 created_date: '2026-09-07 16:06'
-updated_date: '2026-09-07 16:12'
+updated_date: '2026-09-07 17:32'
 labels: []
 milestone: m-0
 dependencies: []
@@ -29,10 +29,10 @@ Helper LaunchDaemon + socket; menu bar — единственный login item.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Runtime CLI внутри myVPN.app/Contents/Resources (не /Volumes/Nas и не обязательный ~/.local/share для UI)
-- [ ] #2 Автозапуск = SMAppService login item myVPN.app; старый LaunchAgent zsh снят
-- [ ] #3 Privileged helper: после одной установки On/Off без admin-пароля
-- [ ] #4 В фоновых объектах — myVPN, не отдельный bash/python login-boot
+- [x] #1 Runtime CLI внутри myVPN.app/Contents/Resources (не /Volumes/Nas и не обязательный ~/.local/share для UI)
+- [x] #2 Автозапуск = SMAppService login item myVPN.app; старый LaunchAgent zsh снят
+- [x] #3 Privileged helper: после одной установки On/Off без admin-пароля
+- [x] #4 В фоновых объектах — myVPN, не отдельный bash/python login-boot
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -49,4 +49,12 @@ Helper LaunchDaemon + socket; menu bar — единственный login item.
 
 <!-- SECTION:NOTES:BEGIN -->
 Собрано: runtime в ~/Applications/myVPN.app/Contents/Resources/runtime; helper LaunchDaemon local.myvpn.mac.helper; legacy LaunchAgent zsh снят. Helper установлен на этой машине (socket ok, ping ready). Нужен ручной QA: On/Off без пароля, Login Item myVPN, auto-NAS.
+
+QA close 2026-09-07: verified runtime libs in ~/Applications/myVPN.app; helper socket ready; sfltool shows myVPN login item; no ~/Library/LaunchAgents myvpn; AC #1–#4 checked.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Runtime в app, Login Item myVPN.app, helper без пароля на On/Off, нет zsh LaunchAgent. QA: helper=1, status tun/macbook/home/nas=1 на машине владельца.
+<!-- SECTION:FINAL_SUMMARY:END -->
