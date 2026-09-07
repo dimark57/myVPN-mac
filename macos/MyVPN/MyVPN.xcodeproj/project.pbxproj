@@ -14,8 +14,8 @@
 		A1000000000000000000002E /* MyVPNHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* MyVPNHelper.swift */; };
 		A1000000000000000000002F /* RuntimePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002C /* RuntimePaths.swift */; };
 		A10000000000000000000050 /* LoginItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* LoginItemController.swift */; };
-		A10000000000000000000052 /* RulesStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000051 /* RulesStatus.swift */; };
-		A10000000000000000000054 /* StickyMenuItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000053 /* StickyMenuItemView.swift */; };
+		A10000000000000000000051 /* RulesStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000060 /* RulesStatus.swift */; };
+		A10000000000000000000052 /* StickyMenuItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000061 /* StickyMenuItemView.swift */; };
 		A1000000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -28,8 +28,8 @@
 		A1000000000000000000002B /* MyVPNHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyVPNHelper.swift; sourceTree = "<group>"; };
 		A1000000000000000000002C /* RuntimePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimePaths.swift; sourceTree = "<group>"; };
 		A1000000000000000000002D /* LoginItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; };
-		A10000000000000000000051 /* RulesStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesStatus.swift; sourceTree = "<group>"; };
-		A10000000000000000000053 /* StickyMenuItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyMenuItemView.swift; sourceTree = "<group>"; };
+		A10000000000000000000060 /* RulesStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesStatus.swift; sourceTree = "<group>"; };
+		A10000000000000000000061 /* StickyMenuItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyMenuItemView.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -63,8 +63,8 @@
 				A1000000000000000000002C /* RuntimePaths.swift */,
 				A1000000000000000000002D /* LoginItemController.swift */,
 				A10000000000000000000022 /* StatusSnapshot.swift */,
-				A10000000000000000000051 /* RulesStatus.swift */,
-				A10000000000000000000053 /* StickyMenuItemView.swift */,
+				A10000000000000000000060 /* RulesStatus.swift */,
+				A10000000000000000000061 /* StickyMenuItemView.swift */,
 				A10000000000000000000028 /* Assets.xcassets */,
 				A10000000000000000000023 /* Info.plist */,
 			);
@@ -151,8 +151,8 @@
 				A1000000000000000000002F /* RuntimePaths.swift in Sources */,
 				A10000000000000000000050 /* LoginItemController.swift in Sources */,
 				A10000000000000000000026 /* StatusSnapshot.swift in Sources */,
-				A10000000000000000000052 /* RulesStatus.swift in Sources */,
-				A10000000000000000000054 /* StickyMenuItemView.swift in Sources */,
+				A10000000000000000000051 /* RulesStatus.swift in Sources */,
+				A10000000000000000000052 /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -116,6 +116,7 @@ myvpn_render() {
 }
 
 # Skip render/check when inputs are older than existing JSON (hot up path).
+# Also invalidate when render_config.py itself changed (DNS/route logic).
 myvpn_config_fresh() {
   local out="${MYVPN_CONFIG_JSON}"
   [[ -f "${out}" ]] || return 1
@@ -123,6 +124,7 @@ myvpn_config_fresh() {
   [[ "${out}" -nt "${MYVPN_HOME_CONF}" ]] || return 1
   [[ "${out}" -nt "${MYVPN_GEOSITE_SRS}" ]] || return 1
   [[ "${out}" -nt "${MYVPN_GEOIP_SRS}" ]] || return 1
+  [[ "${out}" -nt "${MYVPN_LIB}/render_config.py" ]] || return 1
   return 0
 }
 

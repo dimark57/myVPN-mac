@@ -58,15 +58,18 @@ def build_config(macbook, home, geosite_srs, geoip_srs):
 
     return {
         "log": {"level": "info", "timestamp": True},
+        # RU DNS: explicit UDP without detour (system/default dial).
+        # - type:local loops: up() sets Wi-Fi DNS to TUN 172.19.0.1
+        # - detour:direct fatals on sing-box 1.14: "empty direct outbound makes no sense"
         "dns": {
             "servers": [
                 {"type": "udp", "tag": "dns-home", "server": "10.57.0.100", "server_port": 53, "detour": "home"},
                 {"type": "udp", "tag": "dns-remote", "server": "1.1.1.1", "server_port": 53, "detour": "macbook"},
-                {"type": "local", "tag": "dns-local"},
+                {"type": "udp", "tag": "dns-direct", "server": "8.8.8.8", "server_port": 53},
             ],
             "rules": [
                 {"domain_suffix": ["digials.com", "digials.ru"], "server": "dns-home"},
-                {"rule_set": "geosite-ru", "server": "dns-local"},
+                {"rule_set": "geosite-ru", "server": "dns-direct"},
             ],
             "final": "dns-remote",
             "strategy": "ipv4_only",
@@ -84,7 +87,7 @@ def build_config(macbook, home, geosite_srs, geoip_srs):
         "outbounds": [{"type": "direct", "tag": "direct"}],
         "route": {
             "auto_detect_interface": True,
-            "default_domain_resolver": {"server": "dns-local", "strategy": "ipv4_only"},
+            "default_domain_resolver": {"server": "dns-direct", "strategy": "ipv4_only"},
             "rules": [
                 {"action": "sniff"},
                 {"protocol": "dns", "action": "hijack-dns"},
