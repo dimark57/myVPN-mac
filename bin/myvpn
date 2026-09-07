@@ -1,0 +1,290 @@
+#!/bin/zsh
+# myVPN CLI — sing-box split-tunnel (doc-2). Local install under ~/.local/share/myvpn.
+set -uo pipefail
+
+MYVPN_ROOT="$(cd "${0:A:h}/.." && pwd)"
+source "${MYVPN_ROOT}/lib/env.zsh"
+source "${MYVPN_LIB}/admin.zsh"
+source "${MYVPN_LIB}/process.zsh"
+source "${MYVPN_LIB}/nas.zsh"
+
+usage() {
+  cat <<'EOF'
+myvpn — Mac split-tunnel (sing-box)
+
+  myvpn up | down | status | update-rules | mount-nas | install-autostart
+  myvpn uninstall-autostart
+  myvpn autostart [on|off|status]     # flag + menu bar Login Item (не zsh LaunchAgent)
+  myvpn auto-nas [on|off|status]      # mount-nas during login-boot / app launch
+  myvpn helper-status                 # privileged helper socket
+  myvpn flush-dns    # clear mDNSResponder (Hub 403 after stale 94…)
+  myvpn login-boot   # legacy LaunchAgent (prefer app + helper)
+  myvpn render       # regenerate JSON only
+EOF
+}
+
+cmd_update_rules() {
+  myvpn_ensure_dirs
+  /usr/bin/python3 "${MYVPN_LIB}/update_rules.py" \
+    --out-dir "${MYVPN_RULES_DIR}" \
+    --sing-box "${MYVPN_SING_BOX}"
+}
+
+cmd_render() {
+  myvpn_ensure_dirs
+  if [[ ! -f "${MYVPN_GEOSITE_SRS}" || ! -f "${MYVPN_GEOIP_SRS}" ]]; then
+    print -r -- "rules missing — run: myvpn update-rules" >&2
+    return 1
+  fi
+  myvpn_render
+  "${MYVPN_SING_BOX}" check -c "${MYVPN_CONFIG_JSON}"
+}
+
+cmd_install_autostart() {
+  local dest bin_path plist_src plist_dst
+  myvpn_ensure_dirs
+  myvpn_keychain_ensure || return 1
+
+  # Runtime MUST live on local disk (not /Volumes/Nas) — VPN down unmounts NAS.
+  dest="${HOME}/.local/share/myvpn"
+  mkdir -p "${dest}"
+  if [[ "${MYVPN_ROOT}" != "${dest}" ]]; then
+    /usr/bin/rsync -a --delete \
+      --exclude '.git' --exclude '.backlog' --exclude '.cursor' \
+      "${MYVPN_ROOT}/bin" "${MYVPN_ROOT}/lib" "${MYVPN_ROOT}/share" "${MYVPN_ROOT}/tests" \
+      "${dest}/" 2>/dev/null || {
+      /bin/mkdir -p "${dest}/bin" "${dest}/lib" "${dest}/share" "${dest}/tests"
+      /bin/cp -R "${MYVPN_ROOT}/bin/." "${dest}/bin/"
+      /bin/cp -R "${MYVPN_ROOT}/lib/." "${dest}/lib/"
+      /bin/cp -R "${MYVPN_ROOT}/share/." "${dest}/share/" 2>/dev/null || true
+      /bin/cp -R "${MYVPN_ROOT}/tests/." "${dest}/tests/" 2>/dev/null || true
+    }
+  fi
+  /bin/chmod +x "${dest}/bin/myvpn"
+
+  bin_path="${HOME}/.local/bin/myvpn"
+  mkdir -p "${HOME}/.local/bin"
+  /bin/ln -sfn "${dest}/bin/myvpn" "${bin_path}"
+
+  plist_src="${dest}/share/launchagents/local.myvpn.mac.login.plist"
+  plist_dst="${HOME}/Library/LaunchAgents/${MYVPN_LAUNCH_LABEL}.plist"
+  mkdir -p "${HOME}/Library/LaunchAgents" "${dest}/share/launchagents"
+  if [[ ! -f "${plist_src}" ]]; then
+    cat > "${plist_src}" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.myvpn.mac.login</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>__MYVPN_BIN__</string>
+    <string>login-boot</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__MYVPN_HOME__/launchagent.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__MYVPN_HOME__/launchagent.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
+PLIST
+  fi
+  /usr/bin/sed \
+    -e "s|__MYVPN_BIN__|${bin_path}|g" \
+    -e "s|__MYVPN_HOME__|${MYVPN_HOME}|g" \
+    "${plist_src}" > "${plist_dst}"
+
+  launchctl bootout "gui/$(id -u)/${MYVPN_LAUNCH_LABEL}" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$(id -u)" "${plist_dst}" 2>/dev/null \
+    || launchctl load -w "${plist_dst}" 2>/dev/null || true
+  print -r -- "installed local runtime ${dest}"
+  print -r -- "symlink ${bin_path} -> ${dest}/bin/myvpn"
+  print -r -- "LaunchAgent ${plist_dst}"
+}
+
+cmd_uninstall_autostart() {
+  local plist_dst="${HOME}/Library/LaunchAgents/${MYVPN_LAUNCH_LABEL}.plist"
+  launchctl bootout "gui/$(id -u)/${MYVPN_LAUNCH_LABEL}" >/dev/null 2>&1 || true
+  launchctl unload -w "${plist_dst}" >/dev/null 2>&1 || true
+  /bin/rm -f "${plist_dst}"
+  print -r -- "autostart removed (${MYVPN_LAUNCH_LABEL})"
+}
+
+myvpn_app_autostart_flag() {
+  print -r -- "${MYVPN_HOME}/auto-up-on-launch"
+}
+
+myvpn_autostart_enabled() {
+  [[ -f "$(myvpn_app_autostart_flag)" ]] && return 0
+  local plist_dst="${HOME}/Library/LaunchAgents/${MYVPN_LAUNCH_LABEL}.plist"
+  [[ -f "${plist_dst}" ]] || return 1
+  launchctl print "gui/$(id -u)/${MYVPN_LAUNCH_LABEL}" >/dev/null 2>&1
+}
+
+cmd_autostart() {
+  local mode="${1:-status}"
+  case "$mode" in
+    on|enable)
+      myvpn_ensure_dirs
+      /usr/bin/touch "$(myvpn_app_autostart_flag)"
+      # Prefer menu bar login item; drop legacy zsh LaunchAgent.
+      cmd_uninstall_autostart >/dev/null 2>&1 || true
+      print -r -- "autostart=1 (flag; enable Login Item in myVPN.app)"
+      ;;
+    off|disable)
+      /bin/rm -f "$(myvpn_app_autostart_flag)"
+      cmd_uninstall_autostart >/dev/null 2>&1 || true
+      print -r -- "autostart=0"
+      ;;
+    status|"")
+      if myvpn_autostart_enabled; then
+        print -r -- "autostart=1"
+        return 0
+      fi
+      print -r -- "autostart=0"
+      return 1
+      ;;
+    *)
+      print -r -- "usage: myvpn autostart on|off|status" >&2
+      return 1
+      ;;
+  esac
+}
+
+myvpn_auto_nas_flag() {
+  print -r -- "${MYVPN_HOME}/auto-mount-nas"
+}
+
+myvpn_auto_nas_enabled() {
+  [[ -f "$(myvpn_auto_nas_flag)" ]]
+}
+
+cmd_auto_nas() {
+  local mode="${1:-status}" flag
+  flag="$(myvpn_auto_nas_flag)"
+  myvpn_ensure_dirs
+  case "$mode" in
+    on|enable)
+      /usr/bin/touch "${flag}"
+      print -r -- "auto_nas=1"
+      ;;
+    off|disable)
+      /bin/rm -f "${flag}"
+      print -r -- "auto_nas=0"
+      ;;
+    status|"")
+      if myvpn_auto_nas_enabled; then
+        print -r -- "auto_nas=1"
+        return 0
+      fi
+      print -r -- "auto_nas=0"
+      return 1
+      ;;
+    *)
+      print -r -- "usage: myvpn auto-nas on|off|status" >&2
+      return 1
+      ;;
+  esac
+}
+
+cmd_login_boot() {
+  # Quiet CLI banners: menu bar (opened below) is the UI.
+  export MYVPN_QUIET=1
+  myvpn_ensure_dirs
+  if [[ ! -f "${MYVPN_GEOSITE_SRS}" || ! -f "${MYVPN_GEOIP_SRS}" ]]; then
+    cmd_update_rules || true
+  fi
+  local i
+  for (( i=1; i<=30; i++ )); do
+    if /sbin/ping -c 1 -W 1000 1.1.1.1 >/dev/null 2>&1 \
+      || /sbin/ping -c 1 -W 1000 192.168.3.1 >/dev/null 2>&1; then
+      break
+    fi
+    /bin/sleep 2
+  done
+  if ! myvpn_is_running; then
+    myvpn_cmd_up || true
+  fi
+  /bin/sleep 2
+  # Default ON for first installs that already had mount in login-boot:
+  # if flag never created, treat as enabled once and create it.
+  if ! myvpn_auto_nas_enabled && [[ ! -f "${MYVPN_HOME}/.auto-mount-nas-initialized" ]]; then
+    /usr/bin/touch "$(myvpn_auto_nas_flag)"
+    /usr/bin/touch "${MYVPN_HOME}/.auto-mount-nas-initialized"
+  fi
+  if myvpn_auto_nas_enabled; then
+    myvpn_cmd_mount_nas || true
+  else
+    print -r -- "auto-nas off — skip mount"
+  fi
+
+  # Menu bar UI is a separate process — start it after the core is up.
+  myvpn_open_menubar
+}
+
+myvpn_open_menubar() {
+  local app=""
+  if [[ -d "${HOME}/Applications/myVPN.app" ]]; then
+    app="${HOME}/Applications/myVPN.app"
+  elif [[ -d "/Applications/myVPN.app" ]]; then
+    app="/Applications/myVPN.app"
+  fi
+  [[ -n "$app" ]] || return 0
+  if /usr/bin/pgrep -f "${app}/Contents/MacOS/myVPN" >/dev/null 2>&1; then
+    return 0
+  fi
+  /usr/bin/open "$app" >/dev/null 2>&1 || true
+}
+
+main() {
+  local cmd="${1:-}"
+  [[ -n "$cmd" ]] || { usage; return 1; }
+  shift || true
+  case "$cmd" in
+    up)
+      if [[ "$(/usr/bin/id -u)" != "0" ]] && myvpn_helper_available; then
+        myvpn_via_helper up
+      else
+        myvpn_cmd_up "$@"
+      fi
+      ;;
+    down)
+      if [[ "$(/usr/bin/id -u)" != "0" ]] && myvpn_helper_available; then
+        myvpn_via_helper down
+      else
+        myvpn_cmd_down "$@"
+      fi
+      ;;
+    status) myvpn_cmd_status "$@" ;;
+    update-rules) cmd_update_rules "$@" ;;
+    mount-nas) myvpn_cmd_mount_nas "$@" ;;
+    flush-dns) myvpn_flush_dns "$@" ;;
+    install-autostart) cmd_install_autostart "$@" ;;
+    uninstall-autostart) cmd_uninstall_autostart "$@" ;;
+    autostart) cmd_autostart "$@" ;;
+    auto-nas) cmd_auto_nas "$@" ;;
+    login-boot) cmd_login_boot "$@" ;;
+    render) cmd_render "$@" ;;
+    helper-status)
+      if myvpn_helper_available; then
+        print -r -- "helper=1"
+        return 0
+      fi
+      print -r -- "helper=0"
+      return 1
+      ;;
+    -h|--help|help) usage ;;
+    *) print -r -- "unknown: $cmd" >&2; usage; return 1 ;;
+  esac
+}
+
+main "$@"

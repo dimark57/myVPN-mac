@@ -3,9 +3,8 @@ id: doc-1
 title: Mac-клиент split-tunnel (создание)
 type: specification
 created_date: '2026-09-07 16:40'
-updated_date: '2026-09-07 16:48'
+updated_date: '2026-09-07 13:00'
 ---
-
 # Mac-клиент split-tunnel — спецификация на создание
 
 Личный клиент на macOS: два WireGuard (MacBook + Home), российские ресурсы **напрямую**, остальной интернет через MacBook, DNS как у Happ (по доменам).
@@ -137,3 +136,18 @@ Exit 0 / ≠0. Короткий текст в stdout для Alfred. Перед `
 ## Открыто (не блокер MVP)
 
 Набор geosite-категорий. Источник `.dat`: ru-routing-dat vs Loyalsoldier. IPv6 direct для RU.
+
+---
+
+## Спеки этапов
+
+Продукт (этот документ) задаёт зачем. На каждый этап стройки — своя спека. Веха: **v0 — Mac split-tunnel**.
+
+| Этап | Спека | Где код |
+|------|--------|---------|
+| 0 Репо | этот документ | myVPN-mac (сделано) |
+| 1–2 Ядро + CLI | **doc-2 — Ядро sing-box и CLI myvpn** | myVPN-mac |
+| 3 Alfred `gv` | **doc-3 — Контракт CLI для Alfred gv** | Utilits (не этот репо) |
+| 4 Menu bar | **doc-4 — Menu bar myVPN** | myVPN-mac |
+| 5 Network Extension | **doc-5 — Network Extension myVPN** | myVPN-mac |
+| Тесты v0 | **doc-6 — Тестирование CLI myvpn** | myVPN-mac |
