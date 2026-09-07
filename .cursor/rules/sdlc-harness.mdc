@@ -1,0 +1,30 @@
+---
+description: SDLC harness — backlog + mySkills
+alwaysApply: true
+---
+
+# SDLC harness (mySkills)
+
+Канон cutover: `mySkills/.backlog/docs/specs/process/doc-21 - Cutover-myMCP-—-уборка-и-перенос.md`.  
+Registry SoT: `myBackLog/registry/projects.json` (не myMCP).
+
+## Какой инструмент когда
+
+| Ситуация | Инструмент | Не делать |
+|----------|------------|-----------|
+| Спека и задача | навык `backlog` (Draft → документ в `.backlog/docs/` → promote) | второй контур планирования в том же чате |
+| Код / **Реализовывай** | одна backlog-задача в целевом репо | планировщик в том же чате |
+| Как делать руками | `mySkills/skills/README.md` | копировать навыки в проект |
+| Продукт / QA чат | только backlog | код в том же чате |
+
+## Железное правило
+
+Один контур: backlog + навыки.
+
+Handoff: спека в `.backlog/docs/` → задача с AC → code-agent берёт одну задачу.
+
+## LOCKED (не переоткрывать)
+
+- **Не** строить новый оркестратор поверх backlog (см. myHarness doc-13).
+- Hub UI: папка на диске ≠ плитка. Нужны `myBackLog/registry/projects.json` **и** `.backlog/`.
+- Этот дом ≠ you2vpn (`BACK-*`).

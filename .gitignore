@@ -1,0 +1,8 @@
+.DS_Store
+.backlog/.local/
+*.sqlite
+*.conf
+.env
+secrets/
+config/*.json
+!config/*.json.example
