@@ -31,7 +31,7 @@ updated_date: '2026-09-07 17:35'
 | 2 | `myvpn up` | тестируемое состояние |
 | 3 | Проверки C*/L*/R* | отчёт |
 | 4 | `myvpn down` | teardown |
-| 5 | Восстановить WireGuard.app **MacBook** | агент снова видит NAS/чат |
+| 5 | Восстановить **myvpn** (default) или WireGuard.app MacBook (`MYVPN_CYCLE_RESTORE=app`) | агент снова видит NAS/чат |
 
 Фазы 4–5 — в `always` / `trap`: даже при FAIL проверок сеть агенту вернуть. **Агент из чата не делает `up`/`down` в обход цикла** — иначе рвётся `/Volumes/Nas` и сессия (урок соседнего чата).
 
@@ -95,7 +95,7 @@ updated_date: '2026-09-07 17:35'
 | C8 | `public_ip_macbook` | IPv4 выход MacBook (`77…`), не `94…` |
 | C9 | `ping_home_gw` | `10.13.13.1` |
 | C10 | `ping_nas` | `10.57.0.100` |
-| C11 | `endpoint_direct` | маршрут к `94.41.85.180` через LAN-шлюз (`192.168.3.1` / en0), не через VPS |
+| C11 | `endpoint_direct` | пиры `macbook=1` и `home=1` (handshake); при TUN `route get` к endpoint часто показывает utun — это норма, не FAIL |
 | C12 | `restore_app_macbook` | после цикла WireGuard.app MacBook Connected + есть интернет |
 | C13 | `mount_nas` | после up существует `/Volumes/Nas/Project` (или `/Volumes/Nas`) |
 | C14 | `autostart_plist` | LaunchAgent установлен (`launchctl` list / plist в `~/Library/LaunchAgents`) — проверка после `install-autostart` |

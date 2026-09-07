@@ -2,6 +2,7 @@
 .backlog/.local/
 *.sqlite
 *.conf
+!tests/fixtures/*.conf
 .env
 secrets/
 

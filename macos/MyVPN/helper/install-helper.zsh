@@ -45,7 +45,13 @@ if [[ ! -d "${RUNTIME}/bin" || ! -f "${HELPER_SRC}" ]]; then
   exit 1
 fi
 
+# argv0 name is what macOS Login Items shows — use myvpn-helper, not /usr/bin/python3.
+HELPER_BIN="${SUPPORT}/myvpn-helper"
+
 /bin/mkdir -p "${SUPPORT}"
+/bin/cp -f "${HELPER_SRC}" "${HELPER_BIN}"
+/bin/chmod 755 "${HELPER_BIN}"
+# Keep legacy path for older clients that may reference it.
 /bin/cp -f "${HELPER_SRC}" "${SUPPORT}/myvpn_helperd.py"
 /bin/chmod 755 "${SUPPORT}/myvpn_helperd.py"
 
@@ -56,10 +62,13 @@ fi
 <dict>
   <key>Label</key>
   <string>${LABEL}</string>
+  <key>AssociatedBundleIdentifiers</key>
+  <array>
+    <string>local.myvpn.mac</string>
+  </array>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/python3</string>
-    <string>${SUPPORT}/myvpn_helperd.py</string>
+    <string>${HELPER_BIN}</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
