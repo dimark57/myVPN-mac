@@ -1,6 +1,7 @@
 import AppKit
 
 /// Menu row that keeps NSMenu open on click. Optional gray detail on the right.
+/// Hover uses selectedMenuItemColor (same blue as native NSMenuItem).
 final class StickyMenuItemView: NSView {
     var onClick: (() -> Void)?
     var isActionEnabled: Bool = true {
@@ -71,11 +72,30 @@ final class StickyMenuItemView: NSView {
     private func applyColors() {
         if hovered, isActionEnabled {
             label.textColor = .selectedMenuItemTextColor
-            detailLabel.textColor = .selectedMenuItemTextColor.withAlphaComponent(0.75)
+            detailLabel.textColor = .selectedMenuItemTextColor.withAlphaComponent(0.85)
         } else {
             label.textColor = labelColor
             detailLabel.textColor = .tertiaryLabelColor
         }
+    }
+
+    private func setHovered(_ value: Bool) {
+        let next = value && isActionEnabled
+        guard next != hovered else { return }
+        hovered = next
+        applyColors()
+        needsDisplay = true
+    }
+
+    /// NSMenu custom views often miss mouseEntered — sync from window mouse location.
+    private func refreshHoverFromMouse() {
+        guard let window else {
+            setHovered(false)
+            return
+        }
+        let mouse = window.mouseLocationOutsideOfEventStream
+        let local = convert(mouse, from: nil)
+        setHovered(bounds.contains(local))
     }
 
     override func layout() {
@@ -105,26 +125,28 @@ final class StickyMenuItemView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
+        // activeAlways + mouseMoved: menu windows often skip mouseEntered/Exited.
         let area = NSTrackingArea(
             rect: bounds,
-            options: [.activeInActiveApp, .mouseEnteredAndExited, .inVisibleRect],
+            options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
         addTrackingArea(area)
         tracking = area
+        refreshHoverFromMouse()
     }
 
     override func mouseEntered(with event: NSEvent) {
-        hovered = isActionEnabled
-        applyColors()
-        needsDisplay = true
+        setHovered(true)
     }
 
     override func mouseExited(with event: NSEvent) {
-        hovered = false
-        applyColors()
-        needsDisplay = true
+        setHovered(false)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        refreshHoverFromMouse()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -134,8 +156,9 @@ final class StickyMenuItemView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         if hovered, isActionEnabled {
-            NSColor.selectedContentBackgroundColor.setFill()
-            dirtyRect.intersection(bounds).fill()
+            // Same blue highlight as native menu items («Настройки»).
+            NSColor.selectedMenuItemColor.setFill()
+            bounds.fill()
         }
         applyColors()
         if showsCheck, checked {
