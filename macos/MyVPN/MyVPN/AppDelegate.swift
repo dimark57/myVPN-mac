@@ -486,8 +486,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HelpWindowController.show(using: &connectionSettingsWC)
     }
 
-    /// Silent check + auto-install from GitHub Releases (launch + hourly).
+    /// Silent check + optional auto-install (launch + hourly), gated by Update prefs.
     private func runAutoUpdate(reason: String) {
+        guard UpdateChecker.autoCheckEnabled else {
+            log("auto-update: skipped (\(reason)) — auto-check off")
+            return
+        }
         guard !updateInFlight else { return }
         updateInFlight = true
         log("auto-update: check (\(reason))")
@@ -511,6 +515,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
                 let ver = result.latest ?? "?"
+                guard UpdateChecker.autoInstallEnabled else {
+                    self.log("auto-update: available v\(ver) — auto-install off")
+                    self.notify(
+                        title: "myVPN · Доступно v\(ver)",
+                        body: "Автоустановка выкл. Настройки → Update · \(DoctorStatus.nowStamp())",
+                        replacing: "auto-update"
+                    )
+                    self.updateInFlight = false
+                    return
+                }
                 self.notify(
                     title: "myVPN · Обновляю",
                     body: "Ставлю v\(ver) · \(DoctorStatus.nowStamp())",

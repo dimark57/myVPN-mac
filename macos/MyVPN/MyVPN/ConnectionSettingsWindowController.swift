@@ -58,6 +58,8 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var helperUninstallButton: NSButton!
     private var updateStatusLabel: NSTextField!
     private var updateActionButton: NSButton!
+    private var autoCheckBox: NSButton!
+    private var autoInstallBox: NSButton!
     private var prefsBusy = false
 
     convenience init(section: Section = .channels) {
@@ -903,7 +905,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         root.addArrangedSubview(sectionTitle("Обновление приложения"))
         let intro = NSTextField(wrappingLabelWithString:
-            "Источник: GitHub Releases (myVPN.app.zip).\nАвтопроверка при запуске и каждый час — при новой версии ставится сама. Кнопка ниже — вручную.")
+            "Источник: GitHub Releases (myVPN.app.zip). Галочки — поведение в фоне; кнопка — вручную.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
         intro.preferredMaxLayoutWidth = 520
@@ -912,6 +914,30 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let ver = NSTextField(labelWithString: "Текущая версия: v\(UpdateChecker.currentVersion)")
         ver.font = .systemFont(ofSize: 13)
         root.addArrangedSubview(ver)
+
+        autoCheckBox = NSButton(
+            checkboxWithTitle: "Автопроверка при запуске и каждый час",
+            target: self,
+            action: #selector(autoCheckToggled)
+        )
+        autoCheckBox.state = UpdateChecker.autoCheckEnabled ? .on : .off
+        root.addArrangedSubview(autoCheckBox)
+
+        autoInstallBox = NSButton(
+            checkboxWithTitle: "Автоустановка, если найдена новая версия",
+            target: self,
+            action: #selector(autoInstallToggled)
+        )
+        autoInstallBox.state = UpdateChecker.autoInstallEnabled ? .on : .off
+        autoInstallBox.isEnabled = UpdateChecker.autoCheckEnabled
+        root.addArrangedSubview(autoInstallBox)
+
+        let hint = NSTextField(wrappingLabelWithString:
+            "Если автоустановка выкл., при новой версии будет только уведомление.")
+        hint.font = .systemFont(ofSize: 11)
+        hint.textColor = .tertiaryLabelColor
+        hint.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(hint)
 
         updateStatusLabel = NSTextField(labelWithString: "")
         updateStatusLabel.font = .systemFont(ofSize: 12)
@@ -923,6 +949,19 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         updateActionButton.keyEquivalent = ""
         root.addArrangedSubview(updateActionButton)
         return root
+    }
+
+    @objc private func autoCheckToggled() {
+        let on = autoCheckBox.state == .on
+        UpdateChecker.autoCheckEnabled = on
+        autoInstallBox?.isEnabled = on
+        updateStatusLabel?.stringValue = on ? "Автопроверка включена" : "Автопроверка выключена"
+    }
+
+    @objc private func autoInstallToggled() {
+        let on = autoInstallBox.state == .on
+        UpdateChecker.autoInstallEnabled = on
+        updateStatusLabel?.stringValue = on ? "Автоустановка включена" : "Автоустановка выключена (только уведомление)"
     }
 
     @objc private func checkForUpdate() {

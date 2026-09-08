@@ -7,6 +7,29 @@ enum UpdateChecker {
     static let repo = "dimark57/myVPN-mac"
     static let assetName = "myVPN.app.zip"
 
+    private static let autoCheckKey = "local.myvpn.mac.update.autoCheck"
+    private static let autoInstallKey = "local.myvpn.mac.update.autoInstall"
+
+    /// Check on launch + hourly. Default on.
+    static var autoCheckEnabled: Bool {
+        get {
+            let d = UserDefaults.standard
+            if d.object(forKey: autoCheckKey) == nil { return true }
+            return d.bool(forKey: autoCheckKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: autoCheckKey) }
+    }
+
+    /// If newer found during auto-check, install without prompt. Default on.
+    static var autoInstallEnabled: Bool {
+        get {
+            let d = UserDefaults.standard
+            if d.object(forKey: autoInstallKey) == nil { return true }
+            return d.bool(forKey: autoInstallKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: autoInstallKey) }
+    }
+
     struct Result: Sendable {
         var current: String
         var latest: String?
