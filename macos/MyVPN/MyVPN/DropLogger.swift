@@ -1,6 +1,6 @@
 import Foundation
 
-/// Background health DIFF logger. Uses: StatusSnapshot, DoctorStatus cache dir.
+/// Background health DIFF logger + AUTO_* journal. Uses: StatusSnapshot, DoctorStatus cache dir, AutoDoctor.
 enum DropLogger {
     static var logURL: URL {
         URL(fileURLWithPath: DoctorStatus.cacheDir + "/drops.log")
@@ -8,6 +8,22 @@ enum DropLogger {
 
     static var stateURL: URL {
         URL(fileURLWithPath: DoctorStatus.cacheDir + "/drop-state.json")
+    }
+
+    /// Append a free-form journal line (AUTO_DOCTOR / AUTO_HEAL / …).
+    static func logEvent(_ message: String) {
+        let line = "[\(isoNow())] \(message)\n"
+        append(line)
+    }
+
+    /// Last N lines of drops.log for Settings → Диагностика.
+    static func tailLines(_ n: Int = 12) -> String {
+        guard let text = try? String(contentsOf: logURL, encoding: .utf8), !text.isEmpty else {
+            return "(журнал пуст)"
+        }
+        let lines = text.split(whereSeparator: \.isNewline).map(String.init)
+        let slice = lines.suffix(max(1, n))
+        return slice.joined(separator: "\n")
     }
 
     struct Sample: Equatable {
@@ -73,7 +89,15 @@ enum DropLogger {
         if prev.macbook && !cur.macbook { drops.append("macbook-peer не отвечает") }
         if prev.nas && !cur.nas { drops.append("NAS отключился") }
         guard !drops.isEmpty else { return nil }
-        return "\(drops.joined(separator: ", ")) · \(stamp). Жми «Диагностика»."
+        let hint: String
+        if AutoDoctor.autoDoctorEnabled {
+            hint = AutoDoctor.autoHealEnabled
+                ? "автодиагностика + восстановление…"
+                : "автодиагностика…"
+        } else {
+            hint = "Жми «Диагностика»."
+        }
+        return "\(drops.joined(separator: ", ")) · \(stamp). \(hint)"
     }
 
     private static func append(_ line: String) {

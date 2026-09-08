@@ -24,6 +24,7 @@
 		A10000000000000000000058 /* HelpWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000067 /* HelpWindowController.swift */; };
 		A10000000000000000000059 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000068 /* UpdateChecker.swift */; };
 		A1000000000000000000005A /* GlobalHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000069 /* GlobalHotkeys.swift */; };
+		A1000000000000000000005B /* AutoDoctor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006A /* AutoDoctor.swift */; };
 		A1000000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +47,7 @@
 		A10000000000000000000067 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
 		A10000000000000000000068 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		A10000000000000000000069 /* GlobalHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeys.swift; sourceTree = "<group>"; };
+		A1000000000000000000006A /* AutoDoctor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctor.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -88,6 +90,7 @@
 				A10000000000000000000067 /* HelpWindowController.swift */,
 				A10000000000000000000068 /* UpdateChecker.swift */,
 				A10000000000000000000069 /* GlobalHotkeys.swift */,
+				A1000000000000000000006A /* AutoDoctor.swift */,
 				A10000000000000000000061 /* StickyMenuItemView.swift */,
 				A10000000000000000000028 /* Assets.xcassets */,
 				A10000000000000000000023 /* Info.plist */,
@@ -184,6 +187,7 @@
 				A10000000000000000000058 /* HelpWindowController.swift in Sources */,
 				A10000000000000000000059 /* UpdateChecker.swift in Sources */,
 				A1000000000000000000005A /* GlobalHotkeys.swift in Sources */,
+				A1000000000000000000005B /* AutoDoctor.swift in Sources */,
 				A10000000000000000000052 /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

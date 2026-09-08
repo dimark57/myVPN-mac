@@ -9,6 +9,7 @@ labels: []
 dependencies: []
 documentation:
   - doc-4
+  - doc-9
 priority: high
 ---
 
@@ -18,14 +19,14 @@ priority: high
 Постановщик: @CEO
 
 ## Зачем
-Диагностика сейчас только по запросу. При отвале (как сегодняшний MACBOOK_EGRESS_DOWN) человек узнаёт из нотификации DropLogger и сам жмёт «Диагностика» / down-up. Нужен след в журнале и автовосстановление.
+Диагностика сейчас только по запросу. При отвале (как сегодняшний MACBOOK_EGRESS_DOWN) человек узнаёт из нотификации DropLogger и сам жмёт «Диагностика» / down-up. Нужен след в журнале и автовосстановление. Каталог кодов/heal — **doc-9 — Автодоктор: таксономия отвалов и heal**.
 
 ## As-is → To-be
 **As-is:** `DropLogger.observe` пишет DIFF в `drops.log`, нотификация «… Жми Диагностика». Doctor — только меню/⌘.
-**To-be:** на значимый drop (1→0) app сам: (1) `myvpn doctor` → полный отчёт в `~/.cache/myvpn-doctor/`; (2) при FAIL-вердикте по каналам — один auto-heal (`down`→`up`) с cooldown; (3) результат в журнал + нотификация.
+**To-be:** на значимый drop (1→0) app сам: (1) `myvpn doctor` → полный отчёт в `~/.cache/myvpn-doctor/`; (2) при FAIL-вердикте по каналам — один auto-heal (`down`→`up`) с cooldown; (3) результат в журнал + нотификация. В **Настройки → Диагностика** — две галочки + список кодов отвалов + хвост журнала (doc-9 §6).
 
 ## MVP
-Только путь DropLogger (живость каналов/tun/nas), не crash dump процесса.
+Только путь DropLogger (живость каналов/tun/nas), не crash dump процесса. Heal по матрице doc-9 §5.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -45,30 +46,44 @@ priority: high
 - [ ] #1 На drop пишется полный doctor-отчёт без ручного клика
 - [ ] #2 При FAIL каналов выполняется один auto-heal с cooldown; след в drops.log
 - [ ] #3 doc-4 обновлён; ручной doctor без регресса
+- [ ] #4 Настройки→Диагностика: галочки автодиагностики и автовосстановления (persist on/off)
+- [ ] #5 UI Диагностики: список кодов отвалов + хвост drops.log по doc-9
 <!-- DOD:END -->
 
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1) Триггер на существующий drop в DropLogger/AppDelegate. 2) Фоновый doctor → report в кэш. 3) При PRIMARY FAIL — heal down/up + cooldown/флаг. 4) Логи AUTO_* + notify. 5) Правка doc-4.
+1) Спека doc-9 (таксономия) — SoT кодов/heal. 2) Триггер drop → doctor → heal + cooldown. 3) Настройки→Диагностика: 2 галочки + таблица кодов + журнал. 4) Правка doc-4 (ссылка на doc-9). 5) Build/QA.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Критерии:
-- При 1→0 (tun/home/macbook/nas) app сам гоняет `myvpn doctor` и пишет полный отчёт в `~/.cache/myvpn-doctor/` (как ручная диагностика).
-- После doctor (fail с PRIMARY вроде MACBOOK_EGRESS_DOWN / TUN_DOWN / HOME_*) — один авто-heal: down→up (или эквивалент CLI), без пароля если helper есть.
+- При 1→0 (tun/home/macbook/nas) app сам гоняет `myvpn doctor` и пишет полный отчёт в `~/.cache/myvpn-doctor/` (как ручная диагностика) — **если галочка «Автодиагностика при отвале» ON**.
+- После doctor (fail с PRIMARY вроде MACBOOK_EGRESS_DOWN / TUN_DOWN / HOME_*) — один авто-heal: down→up (или эквивалент CLI), без пароля если helper есть — **если галочка «Автовосстановление» ON** (если doctor OFF — heal тоже OFF / disabled). Матрица: **doc-9 §5**.
 - Cooldown ≥5 мин между auto-heal; в drops.log / отчёте есть строки AUTO_DOCTOR / AUTO_HEAL + результат.
 - Нотификация: «диагностика + попытка восстановления» вместо «Жми Диагностика».
-- Ручная «Провести диагностику» не ломается.
+- Ручная «Провести диагностику» всегда доступна, независимо от галочек.
+- **Настройки → Диагностика:** две галочки вкл/выкл, persist; блок кодов отвалов + хвост журнала (doc-9 §6); defaults ON.
+- `HEALTHY_ICMP_FALSE_ALARM` / `CONFLICT_WG_APP` — **не** auto-heal.
+
+## Research (2026-09-08)
+Индустрия: control vs data plane; DPD≠полезность → overlay probes; consecutive failures + cooldown; WG sleep/NAT keepalive. См. **doc-9**.
+
+## Settings UI (CEO 2026-09-08)
+На вкладке Диагностика:
+1. ☐ Автодиагностика при отвале
+2. ☐ Автовосстановление (down→up после FAIL)
+3. Список PRIMARY / heal (из doc-9)
+4. Журнал drops + latest report
 
 ```json
 {
   "packet": "agent_packet",
   "title": "Auto-doctor + auto-heal при отвале каналов",
   "description": "Сейчас DropLogger только DIFF+notify «Жми Диагностика». Нужен автозапуск doctor в журнал и автоматическое восстановление (down/up) без человека.",
-  "plan": "Расширить DropLogger/AppDelegate: на drop → doctor → при FAIL heal с cooldown; логировать в drops.log и doctor report; обновить doc-4.",
+  "plan": "DropLogger → doctor → heal + cooldown; Настройки→Диагностика: 2 галочки; doc-4.",
   "acceptance_criteria": [
     "attached chat",
     "passed Draft",
@@ -82,7 +97,8 @@ priority: high
   "definition_of_done": [
     "AC этапы закрыты",
     "verify-doc / спека menu bar отражает поведение",
-    "ручной doctor и menu не регрессируют"
+    "ручной doctor и menu не регрессируют",
+    "галочки автодиагностики/автовосстановления в Настройки→Диагностика"
   ],
   "requester": "@CEO",
   "assignee": "@MYMAC",
@@ -95,13 +111,14 @@ priority: high
   "refs": [
     "/Volumes/Nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md",
     "/Volumes/Nas/Project/myVPN-mac/macos/MyVPN/MyVPN/DropLogger.swift",
+    "/Volumes/Nas/Project/myVPN-mac/macos/MyVPN/MyVPN/ConnectionSettingsWindowController.swift",
     "/Volumes/Nas/Project/myVPN-mac/lib/doctor.zsh",
     "/Users/dmitrijstolarov/.cache/myvpn-doctor/latest.txt"
   ],
   "dod_testcase": [
     {
       "id": "T1",
-      "step": "Симулировать macbook 1→0 (или реальный отвал egress)",
+      "step": "Симулировать macbook 1→0 (или реальный отвал egress) при галочках ON",
       "where": "menu bar + ~/.cache/myvpn-doctor/",
       "pass": "появился новый report-*.txt с AUTO, drops.log содержит AUTO_DOCTOR"
     },
@@ -116,6 +133,12 @@ priority: high
       "step": "Ручная Провести диагностику",
       "where": "меню / Настройки→Диагностика",
       "pass": "как раньше, отчёт в latest.txt"
+    },
+    {
+      "id": "T4",
+      "step": "Снять обе галочки, спровоцировать drop",
+      "where": "Настройки→Диагностика",
+      "pass": "нет AUTO_DOCTOR/AUTO_HEAL; остаётся только DIFF notify или тишина по политике"
     }
   ]
 }

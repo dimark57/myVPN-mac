@@ -64,6 +64,9 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var diagRunButton: NSButton!
     private var diagOpenButton: NSButton!
     private var diagSendButton: NSButton!
+    private var autoDoctorCheck: NSButton!
+    private var autoHealCheck: NSButton!
+    private var diagJournalLabel: NSTextField!
 
     // System Helper / Update
     private var helperStatusLabel: NSTextField!
@@ -915,17 +918,34 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private func makeDiagnosticsPane() -> NSView {
         let root = NSStackView()
         root.orientation = .vertical
-        root.spacing = 14
+        root.spacing = 12
         root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
         root.alignment = .leading
 
-        root.addArrangedSubview(sectionTitle("Диагностика"))
+        root.addArrangedSubview(sectionTitle("Автодоктор"))
         let intro = NSTextField(wrappingLabelWithString:
-            "Снимок каналов и вердикт. Отчёт: ~/.cache/myvpn-doctor/latest.txt. Отправка разработчику — через GitHub Issues (отчёт копируется в буфер).")
+            "При отвале каналов (1→0) — снимок в ~/.cache/myvpn-doctor/ и опционально восстановление. Ручная диагностика всегда доступна.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
         intro.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(intro)
+
+        autoDoctorCheck = NSButton(
+            checkboxWithTitle: "Автодиагностика при отвале",
+            target: self,
+            action: #selector(autoDoctorToggled)
+        )
+        autoDoctorCheck.state = AutoDoctor.autoDoctorEnabled ? .on : .off
+        root.addArrangedSubview(autoDoctorCheck)
+
+        autoHealCheck = NSButton(
+            checkboxWithTitle: "Автовосстановление (down→up / mount-nas / flush-dns)",
+            target: self,
+            action: #selector(autoHealToggled)
+        )
+        autoHealCheck.state = AutoDoctor.autoHealEnabled ? .on : .off
+        autoHealCheck.isEnabled = AutoDoctor.autoDoctorEnabled
+        root.addArrangedSubview(autoHealCheck)
 
         let doc = appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
         diagStatusLabel = NSTextField(wrappingLabelWithString: diagStatusText(doc))
@@ -938,16 +958,54 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         btns.spacing = 10
         diagRunButton = NSButton(title: "Провести диагностику", target: self, action: #selector(runDiagnosticsFromSettings))
         diagRunButton.bezelStyle = .rounded
-        diagOpenButton = NSButton(title: "Открыть диагностический отчёт", target: self, action: #selector(openDiagnosticsReport))
+        diagOpenButton = NSButton(title: "Открыть отчёт", target: self, action: #selector(openDiagnosticsReport))
         diagOpenButton.bezelStyle = .rounded
-        diagSendButton = NSButton(title: "Отправить отчёт разработчику", target: self, action: #selector(sendDiagnosticsReport))
+        diagSendButton = NSButton(title: "Отправить разработчику", target: self, action: #selector(sendDiagnosticsReport))
         diagSendButton.bezelStyle = .rounded
         btns.addArrangedSubview(diagRunButton)
         btns.addArrangedSubview(diagOpenButton)
         btns.addArrangedSubview(diagSendButton)
         root.addArrangedSubview(btns)
+
+        root.addArrangedSubview(sectionTitle("Коды отвалов"))
+        let codes = NSTextField(wrappingLabelWithString: AutoDoctor.catalog.map {
+            "\($0.code) — \($0.symptom) → \($0.action)"
+        }.joined(separator: "\n"))
+        codes.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        codes.textColor = .secondaryLabelColor
+        codes.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(codes)
+
+        root.addArrangedSubview(sectionTitle("Журнал (drops.log)"))
+        diagJournalLabel = NSTextField(wrappingLabelWithString: DropLogger.tailLines(14))
+        diagJournalLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        diagJournalLabel.textColor = .labelColor
+        diagJournalLabel.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(diagJournalLabel)
+
         refreshDiagnosticsButtons()
         return root
+    }
+
+    @objc private func autoDoctorToggled() {
+        let on = autoDoctorCheck.state == .on
+        AutoDoctor.autoDoctorEnabled = on
+        if !on {
+            AutoDoctor.autoHealEnabled = false
+            autoHealCheck?.state = .off
+        }
+        autoHealCheck?.isEnabled = on
+        setStatus(on ? "Автодиагностика вкл" : "Автодиагностика выкл", ok: true)
+    }
+
+    @objc private func autoHealToggled() {
+        guard AutoDoctor.autoDoctorEnabled else {
+            autoHealCheck.state = .off
+            return
+        }
+        let on = autoHealCheck.state == .on
+        AutoDoctor.autoHealEnabled = on
+        setStatus(on ? "Автовосстановление вкл" : "Автовосстановление выкл", ok: true)
     }
 
     private func diagStatusText(_ doc: DoctorStatus) -> String {
@@ -978,6 +1036,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
                     self.appDelegate?.settingsReloadDoctor()
                     let doc = self.appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
                     self.diagStatusLabel?.stringValue = self.diagStatusText(doc)
+                    self.diagJournalLabel?.stringValue = DropLogger.tailLines(14)
                     self.refreshDiagnosticsButtons()
                     self.setStatus(doc.severityLabel, ok: doc.overall != "FAIL")
                 }
@@ -1271,12 +1330,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     • Routes — таблица маршрутов
     • Доменные зоны — Обновить RU (geosite/geoip)
     • Shares — NAS/DNS + автоподключение NAS
-    • Диагностика — отчёт + отправка разработчику (GitHub Issues)
+    • Диагностика — автодоктор/heal (галочки), коды отвалов, журнал drops.log, отчёт + GitHub Issues
     • Update — автопроверка при запуске и каждый час; кнопка вручную
 
     Menu bar
     • Вкл/Выкл, NAS, Провести диагностику, Проверка обновления, Настройки…
     • Горячие клавиши (глобальные ⌃⌥⌘): V = VPN, N = NAS, D = диагностика, , = настройки
+    • При отвале каналов (если галочки ON): авто doctor → журнал → heal с cooldown
 
     Установка приложения
     • Только из GitHub Releases (myVPN.app.zip) или Настройки → Update

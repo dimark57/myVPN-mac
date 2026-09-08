@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateInFlight = false
     /// Last known GitHub release check for menu detail.
     private var lastUpdateCheck: UpdateChecker.Result?
+    /// Prevent overlapping auto-doctor/heal pipelines.
+    private var autoDoctorInFlight = false
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -992,7 +994,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "down": return "выключение VPN"
         case "mount-nas", "auto-nas": return "монтирование NAS"
         case "update-rules": return "обновление списков RU"
-        case "doctor": return "диагностика"
+        case "doctor", "auto-doctor": return "диагностика"
+        case "auto-heal": return "автовосстановление"
         case "helper-install": return "установка помощника"
         case "helper-uninstall": return "удаление помощника"
         case "autostart": return "автоподнятие"
@@ -1064,7 +1067,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let changed = self.snapshot != next
                 self.snapshot = next
                 if let drop = DropLogger.observe(next) {
-                    self.notify(title: "myVPN ⚠ Отвал", body: drop, replacing: "drop")
+                    self.handleChannelDrop(drop)
                 }
                 self.applyIcon()
                 if self.menuIsOpen, !self.isBusy, changed {
@@ -1073,6 +1076,140 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
         }
+    }
+
+    /// DropLogger 1→0 → optional auto doctor + heal (doc-9 / AutoDoctor).
+    private func handleChannelDrop(_ body: String) {
+        notify(title: "myVPN ⚠ Отвал", body: body, replacing: "drop")
+        guard AutoDoctor.autoDoctorEnabled else { return }
+        guard !autoDoctorInFlight else {
+            DropLogger.logEvent("AUTO_DOCTOR skip=in_flight")
+            return
+        }
+        // Don't fight a user-initiated long op (except allow nesting after idle).
+        if let busyKey, busyKey != "auto-doctor", busyKey != "auto-heal" {
+            DropLogger.logEvent("AUTO_DOCTOR skip=busy:\(busyKey)")
+            return
+        }
+        runAutoDoctorPipeline()
+    }
+
+    private func runAutoDoctorPipeline() {
+        autoDoctorInFlight = true
+        busyKey = "auto-doctor"
+        if menuIsOpen { rebuildMenu() }
+        applyIcon()
+        notify(
+            title: "myVPN · Автодиагностика",
+            body: "Снимаю отчёт · \(DoctorStatus.nowStamp())",
+            replacing: "auto-doctor"
+        )
+        workQueue.async { [weak self] in
+            do {
+                _ = try MyVPNCLI.doctor()
+                let doc = DoctorStatus.load()
+                DropLogger.logEvent(
+                    "AUTO_DOCTOR primary=\(doc.primary.isEmpty ? "?" : doc.primary) overall=\(doc.overall.isEmpty ? "?" : doc.overall)"
+                )
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.doctor = doc
+                    let pair = doc.notificationPair
+                    self.notify(title: pair.title, body: pair.body, replacing: "auto-doctor")
+                    if self.menuIsOpen { self.rebuildMenu() }
+                }
+
+                guard AutoDoctor.autoHealEnabled else {
+                    DropLogger.logEvent("AUTO_HEAL skip=disabled")
+                    DispatchQueue.main.async { self?.finishAutoDoctor() }
+                    return
+                }
+
+                let kind = AutoDoctor.healKind(for: doc.primary)
+                if case .none(let reason) = kind {
+                    DropLogger.logEvent("AUTO_HEAL skip=\(reason) primary=\(doc.primary)")
+                    DispatchQueue.main.async {
+                        self?.notify(
+                            title: "myVPN · Без автовосстановления",
+                            body: "\(doc.userHeadline): \(reason) · \(DoctorStatus.nowStamp())",
+                            replacing: "auto-heal"
+                        )
+                        self?.finishAutoDoctor()
+                    }
+                    return
+                }
+
+                let gate = AutoDoctor.canHealNow()
+                guard gate.ok else {
+                    DropLogger.logEvent("AUTO_HEAL skip=\(gate.reason ?? "gate") primary=\(doc.primary)")
+                    DispatchQueue.main.async {
+                        self?.notify(
+                            title: "myVPN · Heal отложен",
+                            body: "\(gate.reason ?? "cooldown") · \(DoctorStatus.nowStamp())",
+                            replacing: "auto-heal"
+                        )
+                        self?.finishAutoDoctor()
+                    }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    self?.busyKey = "auto-heal"
+                    if self?.menuIsOpen == true { self?.rebuildMenu() }
+                    self?.notify(
+                        title: "myVPN · Автовосстановление",
+                        body: "\(AutoDoctor.kindLabel(kind)) · \(DoctorStatus.nowStamp())",
+                        replacing: "auto-heal"
+                    )
+                }
+
+                do {
+                    try AutoDoctor.performHeal(kind)
+                    AutoDoctor.recordHeal()
+                    DropLogger.logEvent("AUTO_HEAL ok=1 action=\(AutoDoctor.kindLabel(kind)) primary=\(doc.primary)")
+                    DispatchQueue.main.async {
+                        self?.notify(
+                            title: "myVPN ✓ Восстановлено",
+                            body: "\(AutoDoctor.kindLabel(kind)) после \(doc.primary) · \(DoctorStatus.nowStamp())",
+                            replacing: "auto-heal"
+                        )
+                        self?.finishAutoDoctor()
+                        self?.refreshStatus(includePublicIP: true)
+                    }
+                } catch {
+                    DropLogger.logEvent("AUTO_HEAL ok=0 action=\(AutoDoctor.kindLabel(kind)) err=\(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self?.notify(
+                            title: "myVPN ✕ Автовосстановление",
+                            body: error.localizedDescription,
+                            replacing: "auto-heal"
+                        )
+                        self?.finishAutoDoctor()
+                        self?.refreshStatus()
+                    }
+                }
+            } catch {
+                DropLogger.logEvent("AUTO_DOCTOR ok=0 err=\(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self?.notify(
+                        title: "myVPN ✕ Автодиагностика",
+                        body: error.localizedDescription,
+                        replacing: "auto-doctor"
+                    )
+                    self?.finishAutoDoctor()
+                }
+            }
+        }
+    }
+
+    private func finishAutoDoctor() {
+        autoDoctorInFlight = false
+        if busyKey == "auto-doctor" || busyKey == "auto-heal" {
+            busyKey = nil
+        }
+        doctor = DoctorStatus.load()
+        applyIcon()
+        if menuIsOpen { rebuildMenu() }
     }
 
     private func notify(title: String, body: String, replacing key: String? = nil) {

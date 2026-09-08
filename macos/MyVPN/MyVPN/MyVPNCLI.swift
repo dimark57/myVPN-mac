@@ -115,6 +115,13 @@ enum MyVPNCLI {
         return combined
     }
 
+    static func flushDNS() throws {
+        let result = try run(["flush-dns"], timeout: 30, quiet: true)
+        if result.status != 0 {
+            throw MyVPNCLIError.failed(command: "flush-dns", exitCode: result.status, stderr: result.stderr + result.stdout)
+        }
+    }
+
     static func autostartEnabled() -> Bool {
         FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.config/myvpn/auto-up-on-launch")
     }
