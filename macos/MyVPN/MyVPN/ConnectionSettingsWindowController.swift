@@ -404,8 +404,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         let meta = NSGridView()
         meta.columnSpacing = 10
-        meta.rowSpacing = 6
-        meta.setContentHuggingPriority(.required, for: .vertical)
+        meta.rowSpacing = 8
         nameField = field("", maxWidth: 240)
         nameField.placeholderString = "Имя канала"
         idLabel = NSTextField(labelWithString: "")
@@ -419,7 +418,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         meta.addRow(with: [lab("Ping"), pingField!])
         meta.column(at: 0).xPlacement = .trailing
         meta.column(at: 1).xPlacement = .leading
+        for i in 0..<meta.numberOfRows {
+            meta.row(at: i).yPlacement = .center
+            meta.row(at: i).topPadding = 1
+            meta.row(at: i).bottomPadding = 1
+        }
         meta.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        meta.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        meta.setContentCompressionResistancePriority(.required, for: .vertical)
         right.addArrangedSubview(meta)
         right.addArrangedSubview(defaultCheck)
 
@@ -622,8 +628,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         let form = NSGridView()
         form.columnSpacing = 10
-        form.rowSpacing = 6
-        form.setContentHuggingPriority(.required, for: .vertical)
+        form.rowSpacing = 8
         routeTypePopup = NSPopUpButton()
         routeTypePopup.addItems(withTitles: ["CIDR", "rule_set"])
         routeMatchField = field("", maxWidth: 420)
@@ -637,7 +642,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         form.addRow(with: [lab("Заметка"), routeNoteField!])
         form.column(at: 0).xPlacement = .trailing
         form.column(at: 1).xPlacement = .leading
+        for i in 0..<form.numberOfRows {
+            form.row(at: i).yPlacement = .center
+            form.row(at: i).topPadding = 1
+            form.row(at: i).bottomPadding = 1
+        }
         form.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        form.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        form.setContentCompressionResistancePriority(.required, for: .vertical)
         root.addArrangedSubview(form)
 
         loadRouteSelection()
@@ -1360,8 +1372,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     private func field(_ v: String, maxWidth: CGFloat? = nil) -> NSTextField {
         let f = NSTextField(string: v)
-        f.font = .systemFont(ofSize: 13)
+        f.controlSize = .regular
+        f.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         f.bezelStyle = .roundedBezel
+        // Rounded bezel clips glyphs if Auto Layout squeezes below ~24pt.
+        f.heightAnchor.constraint(greaterThanOrEqualToConstant: 24).isActive = true
+        f.setContentHuggingPriority(.required, for: .vertical)
+        f.setContentCompressionResistancePriority(.required, for: .vertical)
         if let maxWidth {
             f.widthAnchor.constraint(equalToConstant: maxWidth).isActive = true
             f.setContentHuggingPriority(.required, for: .horizontal)
