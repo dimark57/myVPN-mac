@@ -1,15 +1,17 @@
 import AppKit
 
-/// Unified preferences: Channels / Routes / NAS·DNS / Help — one chrome.
+/// Unified preferences: System Helper / Channels / Routes / Shares / Update / Help.
 /// Model: named channels (WG conf) + manual routes (Clash-style), not AllowedIPs.
 final class ConnectionSettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     enum Section: Int, CaseIterable {
-        case channels, routes, nas, help
+        case systemHelper, channels, routes, shares, update, help
         var title: String {
             switch self {
-            case .channels: return "Каналы"
-            case .routes: return "Маршруты"
-            case .nas: return "NAS / DNS"
+            case .systemHelper: return "System Helper"
+            case .channels: return "Channels"
+            case .routes: return "Routes"
+            case .shares: return "Shares"
+            case .update: return "Update"
             case .help: return "Справка"
             }
         }
@@ -18,6 +20,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var settings = AppSettings.load()
     private var section: Section = .channels
     private var selectedChannelIndex: Int = 0
+    private let workQueue = DispatchQueue(label: "local.myvpn.mac.settings", qos: .userInitiated)
 
     private var sidebar: NSTableView!
     private var contentBox: NSView!
@@ -31,6 +34,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var pingField: NSTextField!
     private var confEditor: NSTextView!
     private var channelDrafts: [String: String] = [:] // id → conf text
+    private var autostartCheck: NSButton!
 
     // Routes pane
     private var routeTable: NSTableView!
@@ -40,12 +44,21 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var routeNoteField: NSTextField!
     private var selectedRouteIndex: Int = 0
 
-    // NAS pane
+    // Shares pane
     private var nasHostField: NSTextField!
     private var nasShareField: NSTextField!
     private var dnsHomeField: NSTextField!
     private var dnsSuffixField: NSTextField!
     private var dnsViaPopup: NSPopUpButton!
+    private var autoNasCheck: NSButton!
+
+    // System Helper / Update
+    private var helperStatusLabel: NSTextField!
+    private var helperActionButton: NSButton!
+    private var helperUninstallButton: NSButton!
+    private var updateStatusLabel: NSTextField!
+    private var updateActionButton: NSButton!
+    private var prefsBusy = false
 
     convenience init(section: Section = .channels) {
         let window = NSWindow(
@@ -96,10 +109,10 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         header.alignment = .leading
         header.spacing = 4
         header.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 12, right: 20)
-        let title = NSTextField(labelWithString: "Каналы и маршруты")
+        let title = NSTextField(labelWithString: "Настройки")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         let sub = NSTextField(wrappingLabelWithString:
-            "Канал = именованный WireGuard-туннель (один шаблон .conf). Маршруты собираются вручную: условие → канал или direct. AllowedIPs в conf на маршрутизацию не влияют.")
+            "System Helper · Channels · Routes · Shares · Update. Канал = WireGuard (.conf). Маршруты вручную: условие → канал или direct.")
         sub.font = .systemFont(ofSize: 12)
         sub.textColor = .secondaryLabelColor
         sub.preferredMaxLayoutWidth = 740
@@ -119,7 +132,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         sideScroll.borderType = .noBorder
         sideScroll.drawsBackground = false
         sideScroll.translatesAutoresizingMaskIntoConstraints = false
-        sideScroll.widthAnchor.constraint(equalToConstant: 148).isActive = true
+        sideScroll.widthAnchor.constraint(equalToConstant: 160).isActive = true
 
         sidebar = NSTableView()
         sidebar.headerView = nil
@@ -208,9 +221,11 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         contentBox.subviews.forEach { $0.removeFromSuperview() }
         let pane: NSView
         switch section {
+        case .systemHelper: pane = makeSystemHelperPane()
         case .channels: pane = makeChannelsPane()
         case .routes: pane = makeRoutesPane()
-        case .nas: pane = makeNasPane()
+        case .shares: pane = makeSharesPane()
+        case .update: pane = makeUpdatePane()
         case .help: pane = makeHelpPane()
         }
         pane.translatesAutoresizingMaskIntoConstraints = false
@@ -226,10 +241,22 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     // MARK: - Channels
 
     private func makeChannelsPane() -> NSView {
+        let wrap = NSStackView()
+        wrap.orientation = .vertical
+        wrap.spacing = 8
+        wrap.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+
+        autostartCheck = NSButton(
+            checkboxWithTitle: "Автоподнятие после перезагрузки",
+            target: self,
+            action: #selector(toggleAutostart)
+        )
+        autostartCheck.state = (MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled) ? .on : .off
+        wrap.addArrangedSubview(autostartCheck)
+
         let root = NSStackView()
         root.orientation = .horizontal
         root.spacing = 12
-        root.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         root.alignment = .top
 
         let left = NSStackView()
@@ -241,7 +268,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
         channelTable = NSTableView()
         channelTable.headerView = nil
         channelTable.allowsEmptySelection = false
@@ -317,12 +344,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         escroll.borderType = .bezelBorder
         escroll.documentView = confEditor
         escroll.translatesAutoresizingMaskIntoConstraints = false
-        escroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
+        escroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
         right.addArrangedSubview(escroll)
 
         root.addArrangedSubview(right)
+        wrap.addArrangedSubview(root)
         loadChannelSelection()
-        return root
+        return wrap
     }
 
     @objc private func channelClicked() {
@@ -615,14 +643,131 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         loadRouteSelection()
     }
 
-    // MARK: - NAS / Help
+    // MARK: - System Helper / Shares / Update / Help
 
-    private func makeNasPane() -> NSView {
+    private func makeSystemHelperPane() -> NSView {
         let root = NSStackView()
         root.orientation = .vertical
         root.spacing = 14
         root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
         root.alignment = .leading
+
+        root.addArrangedSubview(sectionTitle("Системный помощник"))
+        let intro = NSTextField(wrappingLabelWithString:
+            "LaunchDaemon для On/Off без пароля. Установка — один раз, с паролем администратора.")
+        intro.font = .systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(intro)
+
+        helperStatusLabel = NSTextField(labelWithString: "")
+        helperStatusLabel.font = .systemFont(ofSize: 13)
+        root.addArrangedSubview(helperStatusLabel)
+
+        let btns = NSStackView()
+        btns.orientation = .horizontal
+        btns.spacing = 10
+        helperActionButton = NSButton(title: "Установить", target: self, action: #selector(helperInstallOrReinstall))
+        helperActionButton.bezelStyle = .rounded
+        helperUninstallButton = NSButton(title: "Удалить", target: self, action: #selector(helperUninstall))
+        helperUninstallButton.bezelStyle = .rounded
+        btns.addArrangedSubview(helperActionButton)
+        btns.addArrangedSubview(helperUninstallButton)
+        root.addArrangedSubview(btns)
+
+        refreshHelperPane()
+        return root
+    }
+
+    private func refreshHelperPane() {
+        let ok = MyVPNCLI.helperInstalled()
+        if ok {
+            helperStatusLabel?.stringValue = "Статус: установлен · socket OK"
+            helperStatusLabel?.textColor = .secondaryLabelColor
+            helperActionButton?.title = "Переустановить…"
+            helperUninstallButton?.isEnabled = !prefsBusy
+        } else if MyVPNHelper.filesPresent {
+            helperStatusLabel?.stringValue = "Статус: файлы есть, socket нет — нужна переустановка"
+            helperStatusLabel?.textColor = .systemOrange
+            helperActionButton?.title = "Переустановить…"
+            helperUninstallButton?.isEnabled = !prefsBusy
+        } else {
+            helperStatusLabel?.stringValue = "Статус: не установлен"
+            helperStatusLabel?.textColor = .secondaryLabelColor
+            helperActionButton?.title = "Установить…"
+            helperUninstallButton?.isEnabled = false
+        }
+        helperActionButton?.isEnabled = !prefsBusy
+    }
+
+    @objc private func helperInstallOrReinstall() {
+        guard !prefsBusy else { return }
+        prefsBusy = true
+        refreshHelperPane()
+        setStatus("Устанавливаю помощник…", ok: true)
+        workQueue.async { [weak self] in
+            do {
+                try MyVPNHelper.install()
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.refreshHelperPane()
+                    self?.setStatus("Помощник установлен", ok: true)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.refreshHelperPane()
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
+    }
+
+    @objc private func helperUninstall() {
+        guard !prefsBusy else { return }
+        prefsBusy = true
+        refreshHelperPane()
+        setStatus("Удаляю помощник…", ok: true)
+        workQueue.async { [weak self] in
+            do {
+                try MyVPNHelper.uninstall()
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.refreshHelperPane()
+                    self?.setStatus("Помощник удалён", ok: true)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.refreshHelperPane()
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
+    }
+
+    private func makeSharesPane() -> NSView {
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 14
+        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        root.alignment = .leading
+
+        autoNasCheck = NSButton(
+            checkboxWithTitle: "Автоподключение NAS после перезагрузки",
+            target: self,
+            action: #selector(toggleAutoNAS)
+        )
+        let autoUp = MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled
+        autoNasCheck.state = MyVPNCLI.autoNASEnabled() ? .on : .off
+        autoNasCheck.isEnabled = autoUp
+        root.addArrangedSubview(autoNasCheck)
+        if !autoUp {
+            let hint = NSTextField(labelWithString: "Сначала включи автоподнятие в Channels.")
+            hint.font = .systemFont(ofSize: 11)
+            hint.textColor = .tertiaryLabelColor
+            root.addArrangedSubview(hint)
+        }
 
         root.addArrangedSubview(sectionTitle("NAS (SMB)"))
         nasHostField = field(settings.nasHost)
@@ -649,12 +794,142 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         root.addArrangedSubview(row("Суффиксы", dnsSuffixField))
         root.addArrangedSubview(row("Через канал", dnsViaPopup))
 
-        let note = NSTextField(wrappingLabelWithString: "LAN CIDR больше не отдельное поле — добавь direct-маршрут на вкладке «Маршруты».")
+        let note = NSTextField(wrappingLabelWithString: "LAN CIDR больше не отдельное поле — добавь direct-маршрут на вкладке Routes.")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
         note.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(note)
         return root
+    }
+
+    private func makeUpdatePane() -> NSView {
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 14
+        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        root.alignment = .leading
+
+        root.addArrangedSubview(sectionTitle("Обновление приложения"))
+        let intro = NSTextField(wrappingLabelWithString:
+            "Только GitHub Releases (myVPN.app.zip). Тихой фоновой проверки нет — жми кнопку.")
+        intro.font = .systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(intro)
+
+        let ver = NSTextField(labelWithString: "Текущая версия: v\(UpdateChecker.currentVersion)")
+        ver.font = .systemFont(ofSize: 13)
+        root.addArrangedSubview(ver)
+
+        updateStatusLabel = NSTextField(labelWithString: "")
+        updateStatusLabel.font = .systemFont(ofSize: 12)
+        updateStatusLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(updateStatusLabel)
+
+        updateActionButton = NSButton(title: "Проверить обновление", target: self, action: #selector(checkForUpdate))
+        updateActionButton.bezelStyle = .rounded
+        updateActionButton.keyEquivalent = ""
+        root.addArrangedSubview(updateActionButton)
+        return root
+    }
+
+    @objc private func checkForUpdate() {
+        guard !prefsBusy else { return }
+        prefsBusy = true
+        updateActionButton?.isEnabled = false
+        updateStatusLabel?.stringValue = "Проверяю…"
+        Task { [weak self] in
+            let result = await UpdateChecker.check()
+            await MainActor.run {
+                guard let self else { return }
+                self.prefsBusy = false
+                self.updateActionButton?.isEnabled = true
+                if result.upToDate {
+                    self.updateStatusLabel?.stringValue = result.message
+                    return
+                }
+                self.updateStatusLabel?.stringValue = result.message
+                let alert = NSAlert()
+                alert.messageText = "Доступно обновление"
+                alert.informativeText = result.message + "\n\nСкачать и установить из GitHub Releases?"
+                alert.addButton(withTitle: "Обновить")
+                alert.addButton(withTitle: "Открыть на GitHub")
+                alert.addButton(withTitle: "Позже")
+                let choice = alert.runModal()
+                if choice == .alertFirstButtonReturn {
+                    guard let url = result.assetURL else {
+                        if let page = result.releaseURL { NSWorkspace.shared.open(page) }
+                        self.updateStatusLabel?.stringValue = "В релизе нет myVPN.app.zip"
+                        return
+                    }
+                    self.prefsBusy = true
+                    self.updateActionButton?.isEnabled = false
+                    self.updateStatusLabel?.stringValue = "Скачиваю…"
+                    Task {
+                        do {
+                            try await UpdateChecker.install(from: url)
+                        } catch {
+                            await MainActor.run {
+                                self.prefsBusy = false
+                                self.updateActionButton?.isEnabled = true
+                                self.updateStatusLabel?.stringValue = error.localizedDescription
+                            }
+                        }
+                    }
+                } else if choice == .alertSecondButtonReturn, let page = result.releaseURL {
+                    NSWorkspace.shared.open(page)
+                }
+            }
+        }
+    }
+
+    @objc private func toggleAutostart() {
+        guard !prefsBusy, let autostartCheck else { return }
+        let next = autostartCheck.state == .on
+        prefsBusy = true
+        autostartCheck.isEnabled = false
+        workQueue.async { [weak self] in
+            do {
+                try MyVPNCLI.setAutostart(next)
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.autostartCheck?.isEnabled = true
+                    self?.setStatus(next ? "Автоподнятие включено" : "Автоподнятие выключено", ok: true)
+                    if self?.section == .shares { self?.rebuildContent() }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.autostartCheck?.state = next ? .off : .on
+                    self?.autostartCheck?.isEnabled = true
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
+    }
+
+    @objc private func toggleAutoNAS() {
+        guard !prefsBusy, let autoNasCheck else { return }
+        let next = autoNasCheck.state == .on
+        prefsBusy = true
+        autoNasCheck.isEnabled = false
+        workQueue.async { [weak self] in
+            do {
+                try MyVPNCLI.setAutoNAS(next)
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.autoNasCheck?.isEnabled = true
+                    self?.setStatus(next ? "Авто-NAS включён" : "Авто-NAS выключен", ok: true)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.autoNasCheck?.state = next ? .off : .on
+                    self?.autoNasCheck?.isEnabled = true
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
     }
 
     private func makeHelpPane() -> NSView {
@@ -686,13 +961,18 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     3. AllowedIPs в .conf на маршруты myVPN не влияют (в отличие от WireGuard.app).
 
-    Первый запуск
-    • Установить помощника (если пункт в меню)
-    • Каналы → импорт/вставка conf, имя, кто default
-    • Маршруты → LAN direct, домашние сети → home, RU packs
-    • Сохранить → Включить
+    Настройки
+    • System Helper — установка/удаление privileged helper
+    • Channels — conf + автоподнятие после перезагрузки
+    • Routes — таблица маршрутов
+    • Shares — NAS/DNS + автоподключение NAS
+    • Update — проверка версии с GitHub Releases
 
-    Диагностика и обновления — в меню строки.
+    Первый запуск
+    • System Helper → Установить (если пункта нет в меню)
+    • Channels → импорт/вставка conf, имя, кто default
+    • Routes → LAN direct, домашние сети → home, RU packs
+    • Сохранить → Включить
     """
 
     // MARK: - Shared widgets
@@ -816,7 +1096,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     @objc private func saveAll() {
         commitChannelEditor()
         commitRouteEditor()
-        if section == .nas {
+        if section == .shares {
             settings.nasHost = nasHostField?.stringValue.trimmingCharacters(in: .whitespaces) ?? settings.nasHost
             settings.nasShare = nasShareField?.stringValue.trimmingCharacters(in: .whitespaces) ?? settings.nasShare
             if settings.nasShare.isEmpty { settings.nasShare = "Nas" }

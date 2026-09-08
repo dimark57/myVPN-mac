@@ -3,7 +3,7 @@ id: doc-4
 title: Menu bar myVPN
 type: specification
 created_date: '2026-09-07 13:10'
-updated_date: '2026-09-07 17:30'
+updated_date: '2026-09-08 12:30'
 ---
 # Menu bar myVPN
 
@@ -32,7 +32,12 @@ updated_date: '2026-09-07 17:30'
 - Включить / Выключить (disabled, пока helper не установлен)
 - Смонтировать NAS
 - Обновить списки RU (+ info geosite-ru / geoip-ru — **doc-7**)
-- Настройки: helper install/uninstall, автозапуск, auto-NAS, авто-up при запуске
+- Настройки… → окно: System Helper / Channels / Routes / Shares / Update (+ Справка)
+  - System Helper: install/uninstall
+  - Channels: conf + автоподнятие после reboot
+  - Shares: NAS/DNS + авто-NAS
+  - Update: проверка GitHub Releases
+- Справка… — отдельный пункт меню (та же секция окна)
 - Выход
 
 Пока долгая операция: disabled **только** текущий пункт; меню не глушить целиком. Sticky click (меню не закрывать по клику пункта) — решение CEO; закрытие — mouse leave.

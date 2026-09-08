@@ -22,7 +22,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let configDir = NSHomeDirectory() + "/.config/myvpn"
     private let menuWidth: CGFloat = 320
     private var connectionSettingsWC: ConnectionSettingsWindowController?
-    private var updateStatusLine = "Проверить обновление"
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -291,73 +290,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        let settings = NSMenuItem(title: "Настройки", action: nil, keyEquivalent: "")
-        let settingsMenu = NSMenu()
-        settingsMenu.autoenablesItems = false
-        settingsMenu.minimumWidth = menuWidth
-
-        let conn = NSMenuItem()
-        let connView = StickyMenuItemView(title: "Настройки подключения…", width: menuWidth)
-        connView.isActionEnabled = true
-        connView.onClick = { [weak self] in
+        addStickyAction(key: "settings", title: "Настройки…", enabled: true) { [weak self] in
             self?.menu.cancelTracking()
             self?.openConnectionSettings()
-        }
-        conn.view = connView
-        settingsMenu.addItem(conn)
-
-        // Uninstall only when helper is healthy; install/reinstall lives on root when broken
-        if helperOn {
-            settingsMenu.addItem(.separator())
-            let rem = NSMenuItem()
-            let view = StickyMenuItemView(
-                title: actionTitle("helper-uninstall", "Удалить системный помощник"),
-                width: menuWidth
-            )
-            view.isActionEnabled = actionEnabled("helper-uninstall")
-            view.onClick = { [weak self] in self?.uninstallHelper() }
-            rem.view = view
-            settingsMenu.addItem(rem)
-        }
-
-        settingsMenu.addItem(.separator())
-
-        let autoUp = NSMenuItem()
-        let autoUpView = StickyMenuItemView(
-            title: actionTitle("autostart", "Автоподнятие после перезагрузки"),
-            checked: autostartOn,
-            showsCheck: true,
-            width: menuWidth
-        )
-        autoUpView.isActionEnabled = actionEnabled("autostart")
-        autoUpView.onClick = { [weak self] in self?.toggleAutostart() }
-        autoUp.view = autoUpView
-        settingsMenu.addItem(autoUp)
-
-        let autoNas = NSMenuItem()
-        let autoNasView = StickyMenuItemView(
-            title: actionTitle("auto-nas", "Автоподключение NAS после перезагрузки"),
-            checked: autoNASOn,
-            showsCheck: true,
-            width: menuWidth
-        )
-        autoNasView.isActionEnabled = actionEnabled("auto-nas", autostartOn)
-        autoNasView.onClick = { [weak self] in self?.toggleAutoNAS() }
-        autoNas.view = autoNasView
-        settingsMenu.addItem(autoNas)
-
-        settings.submenu = settingsMenu
-        menu.addItem(settings)
-
-        menu.addItem(.separator())
-
-        addStickyAction(
-            key: "check-update",
-            title: updateStatusLine,
-            enabled: actionEnabled("check-update"),
-            detail: busyKey == "check-update" ? "…" : "v\(UpdateChecker.currentVersion)"
-        ) { [weak self] in
-            self?.checkForUpdate()
         }
 
         addStickyAction(key: "help", title: "Справка…", enabled: true) { [weak self] in
@@ -508,32 +443,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func uninstallHelper() {
-        runCommand(key: "helper-uninstall", work: "Удаляю помощник…") {
-            try MyVPNHelper.uninstall()
-        } afterSuccess: { [weak self] in
-            self?.refreshPrefs()
-        }
-    }
-
-    private func toggleAutostart() {
-        let next = !autostartOn
-        runCommand(key: "autostart", work: next ? "Включаю автоподнятие…" : "Выключаю автоподнятие…") {
-            try MyVPNCLI.setAutostart(next)
-        } afterSuccess: { [weak self] in
-            self?.refreshPrefs()
-        }
-    }
-
-    private func toggleAutoNAS() {
-        let next = !autoNASOn
-        runCommand(key: "auto-nas", work: next ? "Включаю авто-NAS…" : "Выключаю авто-NAS…") {
-            try MyVPNCLI.setAutoNAS(next)
-        } afterSuccess: { [weak self] in
-            self?.refreshPrefs()
-        }
-    }
-
     private func openConnectionSettings() {
         if connectionSettingsWC == nil {
             connectionSettingsWC = ConnectionSettingsWindowController(section: .channels)
@@ -543,58 +452,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func openHelp() {
         HelpWindowController.show(using: &connectionSettingsWC)
-    }
-
-    private func checkForUpdate() {
-        guard !isBusy else { return }
-        busyKey = "check-update"
-        updateStatusLine = "Проверяю обновление…"
-        if menuIsOpen { rebuildMenu() }
-        Task { [weak self] in
-            let result = await UpdateChecker.check()
-            await MainActor.run {
-                guard let self else { return }
-                self.busyKey = nil
-                self.updateStatusLine = result.upToDate ? "Проверить обновление" : "Обновить до v\(result.latest ?? "?")"
-                if self.menuIsOpen { self.rebuildMenu() }
-                if result.upToDate {
-                    self.notify(title: "myVPN", body: result.message, replacing: "check-update")
-                    return
-                }
-                let alert = NSAlert()
-                alert.messageText = "Доступно обновление"
-                alert.informativeText = result.message + "\n\nСкачать и установить из GitHub Releases?"
-                alert.addButton(withTitle: "Обновить")
-                alert.addButton(withTitle: "Открыть на GitHub")
-                alert.addButton(withTitle: "Позже")
-                NSApp.activate(ignoringOtherApps: true)
-                let choice = alert.runModal()
-                if choice == .alertFirstButtonReturn {
-                    guard let url = result.assetURL else {
-                        if let page = result.releaseURL { NSWorkspace.shared.open(page) }
-                        self.notify(title: "myVPN", body: "В релизе нет myVPN.app.zip — открой страницу вручную", replacing: "check-update")
-                        return
-                    }
-                    self.busyKey = "check-update"
-                    self.updateStatusLine = "Скачиваю обновление…"
-                    if self.menuIsOpen { self.rebuildMenu() }
-                    Task {
-                        do {
-                            try await UpdateChecker.install(from: url)
-                        } catch {
-                            await MainActor.run {
-                                self.busyKey = nil
-                                self.updateStatusLine = "Проверить обновление"
-                                if self.menuIsOpen { self.rebuildMenu() }
-                                self.notify(title: "myVPN ✕ Обновление", body: error.localizedDescription, replacing: "check-update")
-                            }
-                        }
-                    }
-                } else if choice == .alertSecondButtonReturn, let page = result.releaseURL {
-                    NSWorkspace.shared.open(page)
-                }
-            }
-        }
     }
 
     private func beginAutoUpIfNeeded() {
