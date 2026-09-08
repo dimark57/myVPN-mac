@@ -124,19 +124,18 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         let header = NSStackView()
         header.orientation = .vertical
-        header.alignment = .leading
+        header.alignment = .width
         header.spacing = 4
-        header.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 12, right: 20)
+        header.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 12, right: 24)
         header.translatesAutoresizingMaskIntoConstraints = false
         header.setContentHuggingPriority(.required, for: .vertical)
         header.setContentCompressionResistancePriority(.required, for: .vertical)
         let title = NSTextField(labelWithString: "Настройки")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
-        let sub = NSTextField(wrappingLabelWithString:
+        let sub = Self.fillWidthLabel(
             "Каналы, маршруты, доменные зоны (RU), диагностика, обновление. Канал = WireGuard (.conf).")
         sub.font = .systemFont(ofSize: 12)
         sub.textColor = .secondaryLabelColor
-        sub.preferredMaxLayoutWidth = 740
         header.addArrangedSubview(title)
         header.addArrangedSubview(sub)
 
@@ -336,7 +335,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let wrap = NSStackView()
         wrap.orientation = .vertical
         wrap.spacing = 8
-        wrap.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        wrap.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 24)
         wrap.distribution = .fill
         wrap.setContentHuggingPriority(.defaultLow, for: .vertical)
 
@@ -407,18 +406,20 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         meta.columnSpacing = 10
         meta.rowSpacing = 6
         meta.setContentHuggingPriority(.required, for: .vertical)
-        nameField = field("")
+        nameField = field("", maxWidth: 240)
         nameField.placeholderString = "Имя канала"
         idLabel = NSTextField(labelWithString: "")
         idLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         idLabel.textColor = .secondaryLabelColor
         defaultCheck = NSButton(checkboxWithTitle: "Канал по умолчанию (final / egress)", target: self, action: #selector(defaultToggled))
-        pingField = field("")
+        pingField = field("", maxWidth: 160)
         pingField.placeholderString = "10.8.0.1"
         meta.addRow(with: [lab("Имя"), nameField!])
         meta.addRow(with: [lab("id / файл"), idLabel!])
         meta.addRow(with: [lab("Ping"), pingField!])
         meta.column(at: 0).xPlacement = .trailing
+        meta.column(at: 1).xPlacement = .leading
+        meta.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         right.addArrangedSubview(meta)
         right.addArrangedSubview(defaultCheck)
 
@@ -575,15 +576,15 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let root = NSStackView()
         root.orientation = .vertical
         root.spacing = 10
-        root.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        root.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 24)
         root.distribution = .fill
+        root.alignment = .width
         root.setContentHuggingPriority(.defaultLow, for: .vertical)
 
-        let intro = NSTextField(wrappingLabelWithString:
+        let intro = Self.fillWidthLabel(
             "Порядок сверху вниз. via = id канала или direct. Rule-set: geosite-ru / geoip-ru после «Доменные зоны → Обновить RU».")
         intro.font = .systemFont(ofSize: 11)
         intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 580
         intro.setContentHuggingPriority(.required, for: .vertical)
         root.addArrangedSubview(intro)
 
@@ -625,16 +626,18 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         form.setContentHuggingPriority(.required, for: .vertical)
         routeTypePopup = NSPopUpButton()
         routeTypePopup.addItems(withTitles: ["CIDR", "rule_set"])
-        routeMatchField = field("")
+        routeMatchField = field("", maxWidth: 420)
         routeMatchField.placeholderString = "10.57.0.0/24, 10.13.13.0/24  или  geosite-ru"
         routeViaPopup = NSPopUpButton()
         refillViaPopup()
-        routeNoteField = field("")
+        routeNoteField = field("", maxWidth: 280)
         form.addRow(with: [lab("Тип"), routeTypePopup!])
         form.addRow(with: [lab("Match"), routeMatchField!])
         form.addRow(with: [lab("Via"), routeViaPopup!])
         form.addRow(with: [lab("Заметка"), routeNoteField!])
         form.column(at: 0).xPlacement = .trailing
+        form.column(at: 1).xPlacement = .leading
+        form.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         root.addArrangedSubview(form)
 
         loadRouteSelection()
@@ -758,18 +761,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     // MARK: - System Helper / Shares / Update / Help
 
     private func makeSystemHelperPane() -> NSView {
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 14
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        root.alignment = .leading
+        let root = prefsColumn()
 
         root.addArrangedSubview(sectionTitle("Системный помощник"))
-        let intro = NSTextField(wrappingLabelWithString:
+        let intro = Self.fillWidthLabel(
             "LaunchDaemon для On/Off без пароля. Установка — один раз, с паролем администратора.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(intro)
 
         helperStatusLabel = NSTextField(labelWithString: "")
@@ -779,12 +777,16 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let btns = NSStackView()
         btns.orientation = .horizontal
         btns.spacing = 10
+        btns.alignment = .centerY
         helperActionButton = NSButton(title: "Установить", target: self, action: #selector(helperInstallOrReinstall))
         helperActionButton.bezelStyle = .rounded
         helperUninstallButton = NSButton(title: "Удалить", target: self, action: #selector(helperUninstall))
         helperUninstallButton.bezelStyle = .rounded
         btns.addArrangedSubview(helperActionButton)
         btns.addArrangedSubview(helperUninstallButton)
+        let btnSpacer = NSView()
+        btnSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        btns.addArrangedSubview(btnSpacer)
         root.addArrangedSubview(btns)
 
         refreshHelperPane()
@@ -861,18 +863,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     // MARK: - Domain zones / Diagnostics
 
     private func makeDomainZonesPane() -> NSView {
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 14
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        root.alignment = .leading
+        let root = prefsColumn()
 
         root.addArrangedSubview(sectionTitle("Доменные зоны (RU)"))
-        let intro = NSTextField(wrappingLabelWithString:
+        let intro = Self.fillWidthLabel(
             "Rule-set geosite-ru / geoip-ru для маршрутов. Обновление скачивает свежие списки в ~/.config/myvpn/rules.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(intro)
 
         let rules = appDelegate?.settingsRulesStatus() ?? RulesStatus.load()
@@ -916,18 +913,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     private func makeDiagnosticsPane() -> NSView {
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 12
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        root.alignment = .leading
+        let root = prefsColumn(spacing: 12)
 
         root.addArrangedSubview(sectionTitle("Автодоктор"))
-        let intro = NSTextField(wrappingLabelWithString:
+        let intro = Self.fillWidthLabel(
             "При отвале каналов (1→0) — снимок в ~/.cache/myvpn-doctor/ и опционально восстановление. Ручная диагностика всегда доступна.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(intro)
 
         autoDoctorCheck = NSButton(
@@ -948,14 +940,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         root.addArrangedSubview(autoHealCheck)
 
         let doc = appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
-        diagStatusLabel = NSTextField(wrappingLabelWithString: diagStatusText(doc))
+        diagStatusLabel = Self.fillWidthLabel(diagStatusText(doc))
         diagStatusLabel.font = .systemFont(ofSize: 13)
-        diagStatusLabel.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(diagStatusLabel)
 
         let btns = NSStackView()
         btns.orientation = .horizontal
         btns.spacing = 10
+        btns.alignment = .centerY
         diagRunButton = NSButton(title: "Провести диагностику", target: self, action: #selector(runDiagnosticsFromSettings))
         diagRunButton.bezelStyle = .rounded
         diagOpenButton = NSButton(title: "Открыть отчёт", target: self, action: #selector(openDiagnosticsReport))
@@ -965,22 +957,23 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         btns.addArrangedSubview(diagRunButton)
         btns.addArrangedSubview(diagOpenButton)
         btns.addArrangedSubview(diagSendButton)
+        let btnSpacer = NSView()
+        btnSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        btns.addArrangedSubview(btnSpacer)
         root.addArrangedSubview(btns)
 
         root.addArrangedSubview(sectionTitle("Коды отвалов"))
-        let codes = NSTextField(wrappingLabelWithString: AutoDoctor.catalog.map {
+        let codes = Self.fillWidthLabel(AutoDoctor.catalog.map {
             "\($0.code) — \($0.symptom) → \($0.action)"
         }.joined(separator: "\n"))
         codes.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         codes.textColor = .secondaryLabelColor
-        codes.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(codes)
 
         root.addArrangedSubview(sectionTitle("Журнал (drops.log)"))
-        diagJournalLabel = NSTextField(wrappingLabelWithString: DropLogger.tailLines(14))
+        diagJournalLabel = Self.fillWidthLabel(DropLogger.tailLines(14))
         diagJournalLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         diagJournalLabel.textColor = .labelColor
-        diagJournalLabel.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(diagJournalLabel)
 
         refreshDiagnosticsButtons()
@@ -1073,11 +1066,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     private func makeSharesPane() -> NSView {
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 14
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        root.alignment = .leading
+        let root = prefsColumn()
 
         autoNasCheck = NSButton(
             checkboxWithTitle: "Автоподключение NAS после перезагрузки",
@@ -1096,17 +1085,17 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         }
 
         root.addArrangedSubview(sectionTitle("NAS (SMB)"))
-        nasHostField = field(settings.nasHost)
+        nasHostField = field(settings.nasHost, maxWidth: 220)
         nasHostField.placeholderString = "10.57.0.100"
-        nasShareField = field(settings.nasShare)
+        nasShareField = field(settings.nasShare, maxWidth: 220)
         nasShareField.placeholderString = "Nas"
         root.addArrangedSubview(row("Хост", nasHostField))
         root.addArrangedSubview(row("Шара", nasShareField))
 
         root.addArrangedSubview(sectionTitle("DNS (опционально)"))
-        dnsHomeField = field(settings.dnsHomeServer)
+        dnsHomeField = field(settings.dnsHomeServer, maxWidth: 220)
         dnsHomeField.placeholderString = "10.57.0.1"
-        dnsSuffixField = field(settings.dnsSuffixes.joined(separator: ", "))
+        dnsSuffixField = field(settings.dnsSuffixes.joined(separator: ", "), maxWidth: 320)
         dnsSuffixField.placeholderString = "home.arpa"
         dnsViaPopup = NSPopUpButton()
         for ch in settings.channels {
@@ -1120,27 +1109,21 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         root.addArrangedSubview(row("Суффиксы", dnsSuffixField))
         root.addArrangedSubview(row("Через канал", dnsViaPopup))
 
-        let note = NSTextField(wrappingLabelWithString: "LAN CIDR больше не отдельное поле — добавь direct-маршрут на вкладке Routes.")
+        let note = Self.fillWidthLabel("LAN CIDR больше не отдельное поле — добавь direct-маршрут на вкладке Routes.")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
-        note.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(note)
         return root
     }
 
     private func makeUpdatePane() -> NSView {
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 14
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        root.alignment = .leading
+        let root = prefsColumn()
 
         root.addArrangedSubview(sectionTitle("Обновление приложения"))
-        let intro = NSTextField(wrappingLabelWithString:
+        let intro = Self.fillWidthLabel(
             "Источник: GitHub Releases (myVPN.app.zip). Галочки — поведение в фоне; кнопка — вручную.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(intro)
 
         let ver = NSTextField(labelWithString: "Текущая версия: v\(UpdateChecker.currentVersion)")
@@ -1164,11 +1147,10 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         autoInstallBox.isEnabled = UpdateChecker.autoCheckEnabled
         root.addArrangedSubview(autoInstallBox)
 
-        let hint = NSTextField(wrappingLabelWithString:
+        let hint = Self.fillWidthLabel(
             "Если автоустановка выкл., при новой версии будет только уведомление.")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
-        hint.preferredMaxLayoutWidth = 520
         root.addArrangedSubview(hint)
 
         updateStatusLabel = NSTextField(labelWithString: "")
@@ -1352,6 +1334,21 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     // MARK: - Shared widgets
 
+    /// Left-aligned column: text starts at the left, wraps to full pane width with room on the right.
+    private func prefsColumn(spacing: CGFloat = 14) -> NSStackView {
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = spacing
+        // More trailing inset so long mono lines don't kiss the window edge.
+        root.edgeInsets = NSEdgeInsets(top: 16, left: 12, bottom: 16, right: 24)
+        root.alignment = .width
+        return root
+    }
+
+    private static func fillWidthLabel(_ t: String) -> FillWidthLabel {
+        FillWidthLabel(wrappingLabelWithString: t)
+    }
+
     private func lab(_ t: String) -> NSTextField {
         let f = NSTextField(labelWithString: t)
         f.font = .systemFont(ofSize: 12)
@@ -1361,10 +1358,15 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         return f
     }
 
-    private func field(_ v: String) -> NSTextField {
+    private func field(_ v: String, maxWidth: CGFloat? = nil) -> NSTextField {
         let f = NSTextField(string: v)
         f.font = .systemFont(ofSize: 13)
         f.bezelStyle = .roundedBezel
+        if let maxWidth {
+            f.widthAnchor.constraint(equalToConstant: maxWidth).isActive = true
+            f.setContentHuggingPriority(.required, for: .horizontal)
+            f.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
         return f
     }
 
@@ -1373,8 +1375,9 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         s.orientation = .horizontal
         s.spacing = 12
         s.alignment = .centerY
+        s.setHuggingPriority(.defaultHigh, for: .horizontal)
         s.addArrangedSubview(lab(title))
-        control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         s.addArrangedSubview(control)
         return s
     }
@@ -1382,6 +1385,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private func sectionTitle(_ t: String) -> NSTextField {
         let f = NSTextField(labelWithString: t)
         f.font = .systemFont(ofSize: 12, weight: .semibold)
+        f.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         return f
     }
 
@@ -1511,5 +1515,27 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     @objc private func closeWindow() {
         window?.close()
+    }
+}
+
+/// Wrapping label that always wraps to its laid-out width (no fixed 520pt that eats the right margin).
+private final class FillWidthLabel: NSTextField {
+    convenience init(wrappingLabelWithString string: String) {
+        self.init(labelWithString: string)
+        maximumNumberOfLines = 0
+        lineBreakMode = .byWordWrapping
+        cell?.wraps = true
+        cell?.usesSingleLineMode = false
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        preferredMaxLayoutWidth = 480
+    }
+
+    override func layout() {
+        super.layout()
+        let w = bounds.width
+        guard w > 1, abs(preferredMaxLayoutWidth - w) > 0.5 else { return }
+        preferredMaxLayoutWidth = w
+        invalidateIntrinsicContentSize()
     }
 }
