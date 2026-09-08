@@ -64,5 +64,5 @@ rm -f "${HOME}/Library/LaunchAgents/local.myvpn.mac.login.plist"
 
 print -r -- "installed ${DEST}"
 print -r -- "runtime embedded → Contents/Resources/runtime"
-print -r -- "Next: open app → Настройки → Установить помощник (один пароль)"
+print -r -- "Next: open app → menu «Установить помощника» if shown (один пароль)"
 print -r -- "Then: Автоподнятие после перезагрузки"

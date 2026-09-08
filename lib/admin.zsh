@@ -13,6 +13,8 @@ EOF
 }
 
 myvpn_notify() {
+  # Menu bar uses UNUserNotificationCenter — skip osascript when invoked from app.
+  [[ -n "${MYVPN_QUIET:-}" || -n "${MYVPN_NO_NOTIFY:-}" ]] && return 0
   /usr/bin/osascript <<EOF
 display notification $(/usr/bin/python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$1") with title "myVPN"
 EOF

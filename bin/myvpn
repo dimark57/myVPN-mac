@@ -7,6 +7,7 @@ source "${MYVPN_ROOT}/lib/env.zsh"
 source "${MYVPN_LIB}/admin.zsh"
 source "${MYVPN_LIB}/process.zsh"
 source "${MYVPN_LIB}/nas.zsh"
+source "${MYVPN_LIB}/doctor.zsh"
 
 usage() {
   cat <<'EOF'
@@ -18,6 +19,7 @@ myvpn — Mac split-tunnel (sing-box)
   myvpn autostart [on|off|status]     # flag + menu bar Login Item (не zsh LaunchAgent)
   myvpn auto-nas [on|off|status]      # remount NAS after vpn up / login-boot
   myvpn helper-status                 # privileged helper socket
+  myvpn doctor       # interpretive report (~/.cache/myvpn-doctor/)
   myvpn flush-dns    # clear mDNSResponder (Hub 403 after stale 94…)
   myvpn login-boot   # legacy LaunchAgent (prefer app + helper)
   myvpn render       # regenerate JSON only
@@ -274,6 +276,7 @@ main() {
       fi
       ;;
     status) myvpn_cmd_status "$@" ;;
+    doctor) myvpn_cmd_doctor "$@" ;;
     update-rules) cmd_update_rules "$@" ;;
     mount-nas) myvpn_cmd_mount_nas "$@" ;;
     flush-dns) myvpn_flush_dns "$@" ;;

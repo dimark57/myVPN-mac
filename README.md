@@ -1,40 +1,82 @@
-# myVPN-mac
+# myVPN
 
-Личный Mac-клиент split-tunnel (UI: **myVPN**). Не you2vpn.ru.
+Menu-bar клиент для macOS: несколько WireGuard-туннелей, умная маршрутизация и самодиагностика.
 
-- Продукт: `.backlog/docs/specs/doc-1 - Mac-клиент-split-tunnel-создание.md`
-- Prefix backlog: `MYMAC`
-- Секреты WG: `~/.config/wireguard/` — не в git
-- Alfred `gv`: репозиторий Utilits (контракт — **doc-3**)
+Российские сайты и сервисы идут **напрямую**. Домашняя сеть — через отдельный туннель (по `AllowedIPs`). Остальной интернет — через egress-туннель. Без подписок и облака: ключи только на вашем Mac.
 
-## Стек
+## Возможности
 
-- CLI: `bin/myvpn` + `lib/` (zsh/Python) + Homebrew `sing-box` ≥ 1.12
-- Menu bar: `macos/MyVPN/` → `~/Applications/myVPN.app` (runtime в `Contents/Resources/runtime`)
-- Privileged helper: LaunchDaemon `local.myvpn.mac.helper` (один admin при установке)
+- Вкл/Выкл из строки меню (после одноразовой установки системного помощника — без пароля)
+- Два профиля WireGuard: **egress** и **home (split)** — импорт `.conf`, вставка, правка вручную
+- Списки RU (домены/IP) с обновлением из меню
+- Монтирование NAS по SMB (опционально)
+- **Диагностика** — снимок каналов и понятный вердикт
+- **Проверить обновление** — скачивает релиз с GitHub и обновляет приложение
 
-## Быстрый старт
+## Требования
 
-```bash
-# CLI в PATH (локальный диск, не NAS)
-cp -R bin lib share ~/.local/share/myvpn/   # или install-app.zsh
-ln -sf ~/.local/share/myvpn/bin/myvpn ~/.local/bin/myvpn
+- macOS 13 или новее
+- [sing-box](https://github.com/SagerNet/sing-box) (Homebrew: `brew install sing-box`)
+- Два WireGuard-конфига от вашего провайдера / своего сервера
 
-myvpn update-rules
-myvpn up
-myvpn status   # tun= / macbook= / home= / nas= / ip=
+## Установка
 
-# App + helper
-macos/MyVPN/install-app.zsh
-# В меню: Установить помощник (один пароль) → далее On/Off без пароля
-```
+Приложение ставится **только из GitHub Releases** (не из исходников).
 
-## Команды CLI
+1. Скачайте **myVPN.app.zip** с [Releases](https://github.com/dimark57/myVPN-mac/releases/latest).
+2. Распакуйте в `~/Applications` (или перетащите `myVPN.app` туда).
+3. Откройте приложение (иконка в строке меню).
+4. При предупреждении Gatekeeper: **Системные настройки → Конфиденциальность и безопасность → Открыть всё же** (пока нет нотаризации Apple).
 
-```
-myvpn up | down | status | update-rules | mount-nas [--force]
-myvpn install-autostart | uninstall-autostart
-myvpn autostart | auto-nas | helper-status | flush-dns | render
-```
+## Первый запуск
 
-Спеки этапов: doc-2 (ядро), doc-3 (Alfred), doc-4 (menu bar), doc-5 (NE позже), doc-6 (тесты), doc-7 (UX списков RU).
+1. В меню: **Установить помощника** (появляется только если помощник не ок) — один раз пароль администратора.
+2. **Настройки → Настройки подключения…**
+   - вкладка *Egress* — импорт или вставка конфига выходного туннеля;
+   - вкладка *Home* — конфиг домашней сети (`AllowedIPs` = какие подсети туда пойдут);
+   - вкладка *Маршруты / NAS* — LAN CIDR, NAS, DNS (по желанию);
+   - **Сохранить**.
+3. **Обновить RU** (один раз).
+4. **Включить**.
+
+## Настройка
+
+| Что | Где |
+|-----|-----|
+| Конфиги туннелей | Настройки → Настройки подключения |
+| Удалить помощник | Настройки → Удалить системный помощник |
+| Автозапуск после перезагрузки | Настройки → Автоподнятие… |
+| Авто-NAS | Настройки → Автоподключение NAS… |
+| Справка в приложении | Справка… |
+
+Ключи лежат в `~/.config/wireguard/` на этом Mac и **не** загружаются никуда.
+
+## Обновление
+
+Обновление приложения — **только через релиз на GitHub**, по кнопке в меню:
+
+1. **Проверить обновление** — сравнивает версию с [Releases](https://github.com/dimark57/myVPN-mac/releases/latest).
+2. Если есть новая — **Обновить**: скачает `myVPN.app.zip`, заменит `~/Applications/myVPN.app` и перезапустится.
+
+Фоновой тихой проверки при старте нет: обновление по кнопке (деплой = новый Release на GitHub).
+
+Списки маршрутизации RU — отдельно: **Обновить RU** (это не версия приложения).
+
+## Диагностика
+
+Если интернет «странный» или NAS не виден: **Диагностика**.  
+Логи: `~/Library/Logs/myvpn-menubar.log`, `~/.config/myvpn/sing-box.log`.
+
+## Безопасность
+
+- Приватные ключи WireGuard хранятся только локально.
+- Пароль NAS — в связке ключей macOS.
+- Репозиторий не принимает `.conf` с ключами (см. [SECURITY.md](SECURITY.md)).
+
+## Обратная связь
+
+Issues: [github.com/dimark57/myVPN-mac/issues](https://github.com/dimark57/myVPN-mac/issues)
+
+---
+
+Сборка из исходников — только для разработчиков ([CONTRIBUTING.md](CONTRIBUTING.md)). Пользователям — только Releases. Не связан с you2vpn.ru.

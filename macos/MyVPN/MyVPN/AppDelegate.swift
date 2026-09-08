@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var refreshTimer: Timer?
     private var snapshot = StatusSnapshot()
     private var rules = RulesStatus()
+    private var doctor = DoctorStatus()
     private var busyKey: String?
     private var menuIsOpen = false
     private var mouseMonitor: Any?
@@ -19,7 +20,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let workQueue = DispatchQueue(label: "local.myvpn.mac.cli", qos: .userInitiated)
     private let logURL = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Logs/myvpn-menubar.log")
     private let configDir = NSHomeDirectory() + "/.config/myvpn"
-    private let menuWidth: CGFloat = 300
+    private let menuWidth: CGFloat = 320
+    private var connectionSettingsWC: ConnectionSettingsWindowController?
+    private var helpWC: HelpWindowController?
+    private var updateStatusLine = "Проверить обновление"
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -51,14 +55,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         applyIcon()
         rules = RulesStatus.load()
+        doctor = DoctorStatus.load()
         rebuildMenu()
         refreshStatus()
         refreshPrefs()
 
         // Fallback only — primary updates: menu open + pid-file watcher (Alfred gv / CLI).
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let self, !self.isBusy else { return }
-            self.refreshStatus()
+            self.refreshStatus(includePublicIP: false)
             self.refreshPrefs()
         }
         if let refreshTimer {
@@ -80,8 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menuIsOpen = true
         if !isBusy {
             rules = RulesStatus.load()
+            doctor = DoctorStatus.load()
             // Force fresh status (e.g. after Alfred gv) — do not wait for timer.
-            refreshStatus()
+            refreshStatus(includePublicIP: true)
             refreshPrefs()
         }
         rebuildMenu()
@@ -144,19 +150,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func actionTitle(_ key: String, _ base: String) -> String {
-        busyKey == key ? "\(base) — выполняется" : base
-    }
-
-    private func addInfo(_ text: String) {
-        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        menu.addItem(item)
+        guard busyKey == key else { return base }
+        // Busy titles already end with … / «выполняется» — don't append twice.
+        if base.contains("выполняется") || base.hasSuffix("…") { return base }
+        return "\(base) — выполняется"
     }
 
     private func addStickyAction(
         key: String,
         title: String,
         enabled: Bool,
+        detail: String? = nil,
         checked: Bool? = nil,
         action: @escaping () -> Void
     ) {
@@ -164,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let showsCheck = checked != nil
         let view = StickyMenuItemView(
             title: actionTitle(key, title),
+            detail: detail,
             checked: checked ?? false,
             showsCheck: showsCheck,
             width: menuWidth
@@ -184,54 +189,105 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildMenu() {
         menu.removeAllItems()
 
-        addInfo(statusHeaderTitle)
-        addInfo(helperOn ? "Помощник: установлен" : "Помощник: не установлен")
-        menu.addItem(.separator())
-
+        // VPN — status on the right of the action
+        let vpnDetail: String = {
+            switch busyKey {
+            case "up", "auto-up": return "…"
+            case "down": return "…"
+            default: return snapshot.menuBadge
+            }
+        }()
         if busyKey == "up" || busyKey == "auto-up" {
-            addStickyAction(key: busyKey!, title: "Включаю VPN…", enabled: false) { }
+            addStickyAction(key: busyKey!, title: "Включаю VPN…", enabled: false, detail: vpnDetail) { }
         } else if busyKey == "down" {
-            addStickyAction(key: "down", title: "Выключаю VPN…", enabled: false) { }
-        } else if busyKey == "mount-nas" || busyKey == "auto-nas" {
-            addStickyAction(key: "down", title: "Выключить", enabled: false) { }
+            addStickyAction(key: "down", title: "Выключаю VPN…", enabled: false, detail: vpnDetail) { }
         } else if snapshot.isOn {
-            addStickyAction(key: "down", title: "Выключить", enabled: actionEnabled("down", helperOn)) { [weak self] in
+            addStickyAction(
+                key: "down",
+                title: "Выключить",
+                enabled: actionEnabled("down", helperOn),
+                detail: vpnDetail
+            ) { [weak self] in
                 self?.turnOff()
             }
         } else {
-            addStickyAction(key: "up", title: "Включить", enabled: actionEnabled("up", helperOn)) { [weak self] in
+            addStickyAction(
+                key: "up",
+                title: "Включить",
+                enabled: actionEnabled("up", helperOn),
+                detail: vpnDetail
+            ) { [weak self] in
                 self?.turnOn()
+            }
+        }
+
+        // Helper only when missing / broken (hide when OK)
+        if !helperOn {
+            let title = MyVPNHelper.filesPresent
+                ? "Переустановить помощника"
+                : "Установить помощника"
+            addStickyAction(
+                key: "helper-install",
+                title: title,
+                enabled: actionEnabled("helper-install"),
+                detail: MyVPNHelper.filesPresent ? "нет socket" : nil
+            ) { [weak self] in
+                self?.installHelper()
             }
         }
 
         menu.addItem(.separator())
 
-        addInfo(nasHeaderTitle)
+        // NAS
+        let nasDetail: String = {
+            switch busyKey {
+            case "mount-nas", "auto-nas": return "…"
+            case "up", "auto-up": return autoNASOn ? "ожидание…" : snapshot.nasBadge
+            default: return snapshot.nasBadge
+            }
+        }()
         if busyKey == "mount-nas" || busyKey == "auto-nas" {
-            addStickyAction(key: busyKey!, title: "Монтирую NAS…", enabled: false) { }
+            addStickyAction(key: busyKey!, title: "Монтирую NAS…", enabled: false, detail: nasDetail) { }
         } else {
-            let vpnBusy = busyKey == "up" || busyKey == "auto-up" || busyKey == "down"
             addStickyAction(
                 key: "mount-nas",
                 title: snapshot.nas ? "Перемонтировать NAS" : "Смонтировать NAS",
-                enabled: actionEnabled("mount-nas", !vpnBusy)
+                enabled: actionEnabled("mount-nas"),
+                detail: nasDetail
             ) { [weak self] in
                 self?.mountNAS()
             }
         }
 
+        // RU lists
         addStickyAction(
             key: "update-rules",
-            title: "Обновить списки RU",
-            enabled: actionEnabled("update-rules")
+            title: "Обновить RU",
+            enabled: actionEnabled("update-rules"),
+            detail: busyKey == "update-rules" ? "…" : rules.menuBadge
         ) { [weak self] in
             self?.updateRules()
         }
 
-        addInfo(rules.geositeLine)
-        addInfo(rules.geoipLine)
-        if let summary = rules.updatedSummary {
-            addInfo(summary)
+        menu.addItem(.separator())
+
+        // Doctor
+        let doctorDetail = busyKey == "doctor" ? "…" : doctor.rowDetail
+        addStickyAction(
+            key: "doctor",
+            title: "Диагностика",
+            enabled: actionEnabled("doctor"),
+            detail: doctorDetail
+        ) { [weak self] in
+            self?.runDoctor()
+        }
+        let reportExists = FileManager.default.fileExists(atPath: DoctorStatus.latestURL.path)
+        addStickyAction(
+            key: "open-report",
+            title: "Открыть диагностический отчёт",
+            enabled: reportExists && busyKey != "doctor"
+        ) { [weak self] in
+            self?.openDoctorReport()
         }
 
         menu.addItem(.separator())
@@ -241,7 +297,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsMenu.autoenablesItems = false
         settingsMenu.minimumWidth = menuWidth
 
+        let conn = NSMenuItem()
+        let connView = StickyMenuItemView(title: "Настройки подключения…", width: menuWidth)
+        connView.isActionEnabled = true
+        connView.onClick = { [weak self] in
+            self?.menu.cancelTracking()
+            self?.openConnectionSettings()
+        }
+        conn.view = connView
+        settingsMenu.addItem(conn)
+
+        // Uninstall only when helper is healthy; install/reinstall lives on root when broken
         if helperOn {
+            settingsMenu.addItem(.separator())
             let rem = NSMenuItem()
             let view = StickyMenuItemView(
                 title: actionTitle("helper-uninstall", "Удалить системный помощник"),
@@ -251,16 +319,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             view.onClick = { [weak self] in self?.uninstallHelper() }
             rem.view = view
             settingsMenu.addItem(rem)
-        } else {
-            let ins = NSMenuItem()
-            let view = StickyMenuItemView(
-                title: actionTitle("helper-install", "Установить помощник (один пароль)"),
-                width: menuWidth
-            )
-            view.isActionEnabled = actionEnabled("helper-install")
-            view.onClick = { [weak self] in self?.installHelper() }
-            ins.view = view
-            settingsMenu.addItem(ins)
         }
 
         settingsMenu.addItem(.separator())
@@ -291,6 +349,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         settings.submenu = settingsMenu
         menu.addItem(settings)
+
+        menu.addItem(.separator())
+
+        addStickyAction(
+            key: "check-update",
+            title: updateStatusLine,
+            enabled: actionEnabled("check-update"),
+            detail: busyKey == "check-update" ? "…" : "v\(UpdateChecker.currentVersion)"
+        ) { [weak self] in
+            self?.checkForUpdate()
+        }
+
+        addStickyAction(key: "help", title: "Справка…", enabled: true) { [weak self] in
+            self?.menu.cancelTracking()
+            self?.openHelp()
+        }
 
         menu.addItem(.separator())
 
@@ -342,23 +416,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     private func turnOn() {
-        runCommand(key: "up", work: "Включаю VPN…") {
+        runCommand(key: "up", work: "Включаю VPN") {
             try MyVPNCLI.up()
         } afterSuccess: { [weak self] in
-            // Helper up bypasses CLI remount hook — remount as a visible second phase.
-            guard let self, self.autoNASOn else { return }
-            self.runCommand(key: "mount-nas", work: "Монтирую NAS…") {
-                try MyVPNCLI.mountNAS(force: true)
+            guard let self else { return }
+            if self.autoNASOn {
+                // Helper up bypasses CLI remount hook — remount as a visible second phase.
+                self.runCommand(key: "mount-nas", work: "Монтирую NAS") {
+                    try MyVPNCLI.mountNAS(force: true)
+                } afterSuccess: { [weak self] in
+                    self?.notify(
+                        title: "myVPN ✓ Готово",
+                        body: "VPN включён, NAS смонтирован · \(DoctorStatus.nowStamp())",
+                        replacing: "mount-nas"
+                    )
+                }
+            } else {
+                self.notify(
+                    title: "myVPN ✓ VPN",
+                    body: "Включён · \(DoctorStatus.nowStamp())",
+                    replacing: "up"
+                )
             }
         }
     }
 
     private func turnOff() {
-        runCommand(key: "down", work: "Выключаю VPN…") { try MyVPNCLI.down() }
+        runCommand(key: "down", work: "Выключаю VPN") {
+            try MyVPNCLI.down()
+        } afterSuccess: { [weak self] in
+            self?.notify(
+                title: "myVPN ✓ VPN",
+                body: "Выключен · \(DoctorStatus.nowStamp())",
+                replacing: "down"
+            )
+        }
     }
 
     private func mountNAS() {
-        runCommand(key: "mount-nas", work: "Монтирую NAS…") { try MyVPNCLI.mountNAS() }
+        runCommand(key: "mount-nas", work: "Монтирую NAS") {
+            try MyVPNCLI.mountNAS()
+        } afterSuccess: { [weak self] in
+            self?.notify(
+                title: "myVPN ✓ NAS",
+                body: "Смонтирован · \(DoctorStatus.nowStamp())",
+                replacing: "mount-nas"
+            )
+        }
     }
 
     private func updateRules() {
@@ -367,7 +471,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } afterSuccess: { [weak self] in
             guard let self else { return }
             self.rules = RulesStatus.load()
-            self.notify(title: "myVPN", body: "Списки RU обновлены · \(self.rules.notifyStamp)")
+            self.notify(title: "myVPN ✓ Списки RU", body: "Обновлены · \(self.rules.notifyStamp)", replacing: "update-rules")
+        }
+    }
+
+    private func openDoctorReport() {
+        let url = DoctorStatus.latestURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            notify(
+                title: "myVPN",
+                body: "Отчёта ещё нет — сначала «Диагностика» · \(DoctorStatus.nowStamp())",
+                replacing: "open-report"
+            )
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func runDoctor() {
+        // No start banner — menu shows «выполняется»; one final user-facing notify.
+        runCommand(key: "doctor", work: "Диагностика", timeout: 90, announceStart: false) {
+            _ = try MyVPNCLI.doctor()
+        } afterSuccess: { [weak self] in
+            guard let self else { return }
+            self.doctor = DoctorStatus.load()
+            let pair = self.doctor.notificationPair
+            self.notify(title: pair.title, body: pair.body, replacing: "doctor")
         }
     }
 
@@ -376,7 +505,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try MyVPNHelper.install()
         } afterSuccess: { [weak self] in
             self?.refreshPrefs()
-            self?.notify(title: "myVPN", body: "Помощник установлен — Вкл/Выкл без пароля")
+            self?.notify(title: "myVPN ✓ Помощник", body: "Установлен — Вкл/Выкл без пароля · \(DoctorStatus.nowStamp())", replacing: "helper-install")
         }
     }
 
@@ -406,6 +535,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private func openConnectionSettings() {
+        if connectionSettingsWC == nil {
+            connectionSettingsWC = ConnectionSettingsWindowController()
+        }
+        connectionSettingsWC?.show()
+    }
+
+    private func openHelp() {
+        if helpWC == nil {
+            helpWC = HelpWindowController()
+        }
+        helpWC?.show()
+    }
+
+    private func checkForUpdate() {
+        guard !isBusy else { return }
+        busyKey = "check-update"
+        updateStatusLine = "Проверяю обновление…"
+        if menuIsOpen { rebuildMenu() }
+        Task { [weak self] in
+            let result = await UpdateChecker.check()
+            await MainActor.run {
+                guard let self else { return }
+                self.busyKey = nil
+                self.updateStatusLine = result.upToDate ? "Проверить обновление" : "Обновить до v\(result.latest ?? "?")"
+                if self.menuIsOpen { self.rebuildMenu() }
+                if result.upToDate {
+                    self.notify(title: "myVPN", body: result.message, replacing: "check-update")
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = "Доступно обновление"
+                alert.informativeText = result.message + "\n\nСкачать и установить из GitHub Releases?"
+                alert.addButton(withTitle: "Обновить")
+                alert.addButton(withTitle: "Открыть на GitHub")
+                alert.addButton(withTitle: "Позже")
+                NSApp.activate(ignoringOtherApps: true)
+                let choice = alert.runModal()
+                if choice == .alertFirstButtonReturn {
+                    guard let url = result.assetURL else {
+                        if let page = result.releaseURL { NSWorkspace.shared.open(page) }
+                        self.notify(title: "myVPN", body: "В релизе нет myVPN.app.zip — открой страницу вручную", replacing: "check-update")
+                        return
+                    }
+                    self.busyKey = "check-update"
+                    self.updateStatusLine = "Скачиваю обновление…"
+                    if self.menuIsOpen { self.rebuildMenu() }
+                    Task {
+                        do {
+                            try await UpdateChecker.install(from: url)
+                        } catch {
+                            await MainActor.run {
+                                self.busyKey = nil
+                                self.updateStatusLine = "Проверить обновление"
+                                if self.menuIsOpen { self.rebuildMenu() }
+                                self.notify(title: "myVPN ✕ Обновление", body: error.localizedDescription, replacing: "check-update")
+                            }
+                        }
+                    }
+                } else if choice == .alertSecondButtonReturn, let page = result.releaseURL {
+                    NSWorkspace.shared.open(page)
+                }
+            }
+        }
+    }
+
     private func beginAutoUpIfNeeded() {
         guard !isBusy else { return }
         // Do not require helper socket yet — at login LaunchDaemon often lags Login Item by ~10s.
@@ -419,7 +614,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async {
                     guard self.busyKey == "auto-up" else { return }
                     self.busyKey = nil
-                    self.notify(title: "myVPN", body: "Помощник ещё не готов — включите вручную")
+                    self.notify(title: "myVPN ✕ Помощник", body: "Ещё не готов — включи вручную · \(DoctorStatus.nowStamp())", replacing: "auto-up")
                     self.applyIcon()
                     if self.menuIsOpen { self.rebuildMenu() }
                     self.refreshStatus()
@@ -428,7 +623,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             self.log("auto-up: helper ready")
             // Fresh status — may already be up from a previous session.
-            if let live = try? MyVPNCLI.status(), live.isOn {
+            let live = MyVPNCLI.status(includePublicIP: false)
+            if live.isOn {
                 self.log("auto-up: already on")
                 DispatchQueue.main.async {
                     self.busyKey = nil
@@ -441,33 +637,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let wantNas = MyVPNCLI.autoNASEnabled()
             DispatchQueue.main.async {
                 self.autoNASOn = wantNas
-                self.notify(title: "myVPN", body: "Включаю VPN…")
+                self.notify(title: "myVPN", body: "Включаю VPN · \(DoctorStatus.nowStamp())", replacing: "auto-up")
                 if self.menuIsOpen { self.rebuildMenu() }
             }
             let watchdogKey = "auto-up"
             DispatchQueue.main.asyncAfter(deadline: .now() + 55) { [weak self] in
                 guard let self, self.busyKey == watchdogKey || self.busyKey == "auto-nas" else { return }
                 self.busyKey = nil
-                self.notify(title: "myVPN", body: "Таймаут операции — попробуйте ещё раз")
+                self.notify(title: "myVPN ✕ Не успело", body: "Автозапуск не завершился · \(DoctorStatus.nowStamp()). Включи вручную.", replacing: "auto-up")
                 if self.menuIsOpen { self.rebuildMenu() }
                 self.refreshStatus()
             }
             do {
                 try MyVPNCLI.up()
                 self.log("auto-up: up ok")
-                let afterUp = (try? MyVPNCLI.status()) ?? StatusSnapshot(tun: true)
+                let afterUp = MyVPNCLI.status(includePublicIP: true)
                 if wantNas {
                     DispatchQueue.main.async {
                         guard self.busyKey == "auto-up" else { return }
                         self.snapshot = afterUp
                         self.busyKey = "auto-nas"
                         self.applyIcon()
-                        self.notify(title: "myVPN", body: "Монтирую NAS…")
+                        self.notify(title: "myVPN", body: "Монтирую NAS · \(DoctorStatus.nowStamp())", replacing: "auto-nas")
                         if self.menuIsOpen { self.rebuildMenu() }
                     }
                     try? MyVPNCLI.mountNAS(force: true)
                 }
-                let final = (try? MyVPNCLI.status()) ?? afterUp
+                let final = MyVPNCLI.status(includePublicIP: true)
                 DispatchQueue.main.async {
                     guard self.busyKey == "auto-up" || self.busyKey == "auto-nas" else { return }
                     self.busyKey = nil
@@ -491,19 +687,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func runCommand(
         key: String,
         work: String,
+        timeout: TimeInterval = 55,
+        announceStart: Bool = true,
         body: @escaping () throws -> Void,
         afterSuccess: (() -> Void)? = nil
     ) {
-        guard !isBusy else { return }
+        guard !isBusy else {
+            let who = Self.busyLabel(busyKey ?? "операция")
+            notify(
+                title: "myVPN",
+                body: "Уже выполняется: \(who) (\(DoctorStatus.nowStamp())). Дождись окончания.",
+                replacing: "busy"
+            )
+            return
+        }
         busyKey = key
         if menuIsOpen { rebuildMenu() }
-        notify(title: "myVPN", body: work)
-        // Failsafe: never leave menu stuck busy if helper hangs.
+        if announceStart {
+            notify(title: "myVPN", body: "\(work) · \(DoctorStatus.nowStamp())", replacing: key)
+        }
         let watchdogKey = key
-        DispatchQueue.main.asyncAfter(deadline: .now() + 55) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
             guard let self, self.busyKey == watchdogKey else { return }
             self.busyKey = nil
-            self.notify(title: "myVPN", body: "Таймаут операции — попробуйте ещё раз")
+            let name = Self.busyLabel(watchdogKey)
+            self.notify(
+                title: "myVPN ✕ Не успело",
+                body: "\(name) не завершилась за \(Int(timeout)) с (\(DoctorStatus.nowStamp())). Попробуй ещё раз.",
+                replacing: key
+            )
             if self.menuIsOpen { self.rebuildMenu() }
             self.refreshStatus()
         }
@@ -516,6 +728,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     afterSuccess?()
                     if self?.menuIsOpen == true {
                         self?.rules = RulesStatus.load()
+                        self?.doctor = DoctorStatus.load()
                         self?.rebuildMenu()
                     }
                     self?.refreshStatus()
@@ -524,13 +737,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 DispatchQueue.main.async {
                     guard self?.busyKey == key else { return }
                     self?.busyKey = nil
-                    self?.notify(title: "myVPN", body: error.localizedDescription)
+                    self?.doctor = DoctorStatus.load()
+                    let name = Self.busyLabel(key)
+                    self?.notify(
+                        title: "myVPN ✕ \(name)",
+                        body: "\(error.localizedDescription) (\(DoctorStatus.nowStamp()))",
+                        replacing: key
+                    )
                     if self?.menuIsOpen == true {
                         self?.rebuildMenu()
                     }
                     self?.refreshStatus()
                 }
             }
+        }
+    }
+
+    private static func busyLabel(_ key: String) -> String {
+        switch key {
+        case "up", "auto-up": return "включение VPN"
+        case "down": return "выключение VPN"
+        case "mount-nas", "auto-nas": return "монтирование NAS"
+        case "update-rules": return "обновление списков RU"
+        case "doctor": return "диагностика"
+        case "helper-install": return "установка помощника"
+        case "helper-uninstall": return "удаление помощника"
+        case "autostart": return "автоподнятие"
+        case "check-update": return "проверка обновления"
+        default: return key
         }
     }
 
@@ -570,7 +804,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pidWatchDebounce?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self, !self.isBusy else { return }
-            self.refreshStatus()
+            self.refreshStatus(includePublicIP: false)
         }
         pidWatchDebounce = work
         // sing-box.pid create/delete after gv up/down — debounce burst of FS events.
@@ -578,34 +812,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refreshPrefs() {
-        workQueue.async { [weak self] in
-            let up = MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled
-            let nas = MyVPNCLI.autoNASEnabled()
-            let helper = MyVPNCLI.helperInstalled()
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.autostartOn = up
-                self.autoNASOn = nas
-                self.helperOn = helper
-                if self.menuIsOpen {
-                    self.rebuildMenu()
-                }
-            }
+        autostartOn = MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled
+        autoNASOn = MyVPNCLI.autoNASEnabled()
+        helperOn = MyVPNCLI.helperInstalled()
+        if menuIsOpen {
+            rebuildMenu()
         }
     }
 
-    private func refreshStatus() {
+    private func refreshStatus(includePublicIP: Bool = false) {
         workQueue.async { [weak self] in
-            let next: StatusSnapshot
-            do {
-                next = try MyVPNCLI.status()
-            } catch {
-                next = StatusSnapshot()
-            }
+            var next = MyVPNCLI.status(includePublicIP: includePublicIP)
             DispatchQueue.main.async {
                 guard let self else { return }
+                if !includePublicIP, next.ip.isEmpty {
+                    next.ip = self.snapshot.ip
+                }
                 let changed = self.snapshot != next
                 self.snapshot = next
+                if let drop = DropLogger.observe(next) {
+                    self.notify(title: "myVPN ⚠ Отвал", body: drop, replacing: "drop")
+                }
                 self.applyIcon()
                 if self.menuIsOpen, !self.isBusy, changed {
                     self.rules = RulesStatus.load()
@@ -615,11 +842,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func notify(title: String, body: String) {
+    private func notify(title: String, body: String, replacing key: String? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = String(body.prefix(280))
-        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        // Stable id → replaces previous banner for the same operation (no spam stack).
+        let id = "local.myvpn.mac." + (key ?? UUID().uuidString)
+        let req = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 }

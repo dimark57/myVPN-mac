@@ -8,7 +8,9 @@ import json
 import subprocess
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 
 BASE = "https://raw.githubusercontent.com/GrimbirdUsers/ru-routing-dat/main"
 GEOSITE_ROOT = "category-ru-whitelist"
@@ -21,25 +23,32 @@ def fetch(url: str) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
+_CACHE_LOCK = Lock()
+
+
 def fetch_geosite_file(name: str, cache: dict[str, str]) -> str:
-    if name in cache:
-        return cache[name]
+    with _CACHE_LOCK:
+        hit = cache.get(name)
+    if hit is not None:
+        return hit
     text = fetch(f"{BASE}/data-geosite/{name}")
-    cache[name] = text
+    with _CACHE_LOCK:
+        cache[name] = text
     return text
 
 
-def parse_geosite_lines(name, cache, visiting, domain_suffix, domain):
+def parse_geosite_lines(name, cache, visiting, domain_suffix, domain, pool):
     if name in visiting:
         return
     visiting.add(name)
     text = fetch_geosite_file(name, cache)
+    includes = []
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("include:"):
-            parse_geosite_lines(line.split(":", 1)[1].strip(), cache, visiting, domain_suffix, domain)
+            includes.append(line.split(":", 1)[1].strip())
             continue
         if ":" in line:
             kind, _, rest = line.partition(":")
@@ -54,12 +63,18 @@ def parse_geosite_lines(name, cache, visiting, domain_suffix, domain):
                 domain_suffix.add(line)
         else:
             domain_suffix.add(line)
+    missing = [n for n in includes if n not in cache]
+    if missing:
+        list(pool.map(lambda n: fetch_geosite_file(n, cache), missing))
+    for inc in includes:
+        parse_geosite_lines(inc, cache, visiting, domain_suffix, domain, pool)
     visiting.discard(name)
 
 
 def build_geosite_rules():
     cache, domain_suffix, domain = {}, set(), set()
-    parse_geosite_lines(GEOSITE_ROOT, cache, set(), domain_suffix, domain)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        parse_geosite_lines(GEOSITE_ROOT, cache, set(), domain_suffix, domain, pool)
     rules = []
     if domain_suffix:
         rules.append({"domain_suffix": sorted(domain_suffix)})
@@ -100,12 +115,18 @@ def main() -> int:
     out = args.out_dir
     out.mkdir(parents=True, exist_ok=True)
     try:
-        gs, gi = build_geosite_rules(), build_geoip_rules()
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_gs = ex.submit(build_geosite_rules)
+            f_gi = ex.submit(build_geoip_rules)
+            gs, gi = f_gs.result(), f_gi.result()
         gs_json, gi_json = out / "geosite-ru.json", out / "geoip-ru.json"
         gs_json.write_text(json.dumps(gs), encoding="utf-8")
         gi_json.write_text(json.dumps(gi), encoding="utf-8")
-        compile_srs(args.sing_box, gs_json, out / "geosite-ru.srs")
-        compile_srs(args.sing_box, gi_json, out / "geoip-ru.srs")
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f1 = ex.submit(compile_srs, args.sing_box, gs_json, out / "geosite-ru.srs")
+            f2 = ex.submit(compile_srs, args.sing_box, gi_json, out / "geoip-ru.srs")
+            f1.result()
+            f2.result()
         print(f"ok geosite_rules={sum(len(r.get('domain_suffix',[]))+len(r.get('domain',[])) for r in gs['rules'])} geoip_cidrs={len(gi['rules'][0]['ip_cidr'])} -> {out}")
     except Exception as e:
         print(str(e), file=sys.stderr)

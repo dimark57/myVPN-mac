@@ -60,4 +60,14 @@ struct RulesStatus: Equatable, Sendable {
         guard let latest = dates.max() else { return "готово" }
         return Self.dateFormatter.string(from: latest)
     }
+
+    /// Compact menu detail: `08.09` or `нет`.
+    var menuBadge: String {
+        let dates = [geosite, geoip].compactMap { $0 }
+        guard let latest = dates.max() else { return "нет" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "dd.MM"
+        return f.string(from: latest)
+    }
 }

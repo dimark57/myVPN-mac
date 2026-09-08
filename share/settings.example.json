@@ -1,0 +1,11 @@
+{
+  "lan_cidrs": ["192.168.0.0/16"],
+  "nas_host": "",
+  "nas_share": "Nas",
+  "nas_mount": "/Volumes/Nas",
+  "nas_user": "NAS",
+  "dns_home_server": "",
+  "dns_suffixes": [],
+  "home_ping": "",
+  "macbook_ping": ""
+}

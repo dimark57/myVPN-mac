@@ -1,28 +1,44 @@
 # myVPN-mac — AGENTS
 
-Prefix: `MYMAC` · Role: personal · Contour: `/srv/nas/Project/myVPN-mac/`  
-Mac: `/Volumes/Nas/Project/myVPN-mac/`
+Prefix: `MYMAC` · Role: personal → public-ready · Contour: `/Volumes/Nas/Project/myVPN-mac/`  
+GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
 
 Клиент split-tunnel на macOS (sing-box + два WG). **Не** продукт you2vpn (`/Project/myVPN`, prefix `BACK`).
 
-## Документация
+## Документация (два слоя)
 
-`.backlog/docs/` — спеки. Канон MVP: `.backlog/docs/specs/doc-1 - Mac-клиент-split-tunnel-создание.md`
+| Аудитория | Куда писать |
+|-----------|-------------|
+| Пользователи приложения | `README.md` только (install / update / configure) |
+| Агенты + разработчики | этот файл + `.backlog/docs/specs/` — решения сразу в **doc-8** |
+
+Спеки: doc-1 продукт, doc-2 ядро, doc-3 Alfred, doc-4 menu bar, doc-5 NE, doc-6 тесты, doc-7 RU UX, **doc-8 публичная дистрибуция**.
 
 ## Задачи
 
 `MYMAC-*` — `backlog task list`. Create всегда Draft.
 
-## Навыки
-
-Территория: `/srv/nas/Project/mySkills/skills/`  
-Mac: `/Volumes/Nas/Project/mySkills/skills/`  
-Не копировать навыки в дом.
-
 ## Секреты
 
-Не коммитить `*.conf` с ключами, не класть WG-ключи в чат. Локально: `~/.config/wireguard/` или `~/.config/myvpn/`.
+- Не коммитить `*.conf` с ключами, не класть WG-ключи в чат.
+- Локально: `~/.config/wireguard/{macbook,home}.conf`
+- Маршруты/NAS/DNS (без ключей): `~/.config/myvpn/settings.json` (`lib/settings.py`, `AppSettings.swift`)
+- Пример: `share/settings.example.json`
+
+## Runtime
+
+- **Раздача пользователям:** только GitHub Releases (`myVPN.app.zip`). Не `install-app.zsh` как install path.
+- **Обновление у пользователя:** кнопка «Проверить обновление» (`UpdateChecker` → latest Release). Тихого auto-check при старте нет.
+- **Публикация релиза:** `macos/MyVPN/release.zsh [version]`
+- App: `~/Applications/myVPN.app`, runtime в `Contents/Resources/runtime`
+- CLI symlink: `~/.local/bin/myvpn` → `~/.local/share/myvpn`
+- Helper: LaunchDaemon `local.myvpn.mac.helper`
+- Home CIDR из AllowedIPs conf; LAN/DNS/NAS из settings.json
 
 ## Alfred
 
-Keyword `gv` живёт в **Utilits**. Этот репо — ядро/CLI; связка — отдельная задача после `myvpn` CLI.
+Keyword `gv` живёт в **Utilits**. Этот репо — ядро/CLI/app.
+
+## Навыки
+
+Территория: `/Volumes/Nas/Project/mySkills/skills/` — не копировать в дом.

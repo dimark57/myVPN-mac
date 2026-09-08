@@ -1,30 +1,36 @@
 import AppKit
 
-/// Menu row that keeps NSMenu open on click (standard items dismiss the menu).
+/// Menu row that keeps NSMenu open on click. Optional gray detail on the right.
 final class StickyMenuItemView: NSView {
     var onClick: (() -> Void)?
     var isActionEnabled: Bool = true {
-        didSet { needsDisplay = true; label.textColor = labelColor }
+        didSet { applyColors(); needsDisplay = true }
     }
 
     private let label = NSTextField(labelWithString: "")
+    private let detailLabel = NSTextField(labelWithString: "")
     private var tracking: NSTrackingArea?
     private var hovered = false
     private var checked = false
     private let showsCheck: Bool
 
-    init(title: String, checked: Bool = false, showsCheck: Bool = false, width: CGFloat = 280) {
+    init(
+        title: String,
+        detail: String? = nil,
+        checked: Bool = false,
+        showsCheck: Bool = false,
+        width: CGFloat = 320
+    ) {
         self.checked = checked
         self.showsCheck = showsCheck
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 24))
-        label.stringValue = title
-        label.font = NSFont.menuFont(ofSize: 13)
-        label.textColor = labelColor
-        label.lineBreakMode = .byTruncatingTail
-        label.isEditable = false
-        label.isBordered = false
-        label.drawsBackground = false
+
+        configure(label, title, .labelColor, .left)
+        configure(detailLabel, detail ?? "", .tertiaryLabelColor, .right)
+        detailLabel.font = NSFont.menuFont(ofSize: 12)
+        detailLabel.isHidden = (detail ?? "").isEmpty
         addSubview(label)
+        addSubview(detailLabel)
     }
 
     @available(*, unavailable)
@@ -32,6 +38,14 @@ final class StickyMenuItemView: NSView {
 
     func setTitle(_ title: String) {
         label.stringValue = title
+        needsLayout = true
+    }
+
+    func setDetail(_ detail: String?) {
+        let text = detail ?? ""
+        detailLabel.stringValue = text
+        detailLabel.isHidden = text.isEmpty
+        needsLayout = true
     }
 
     func setChecked(_ value: Bool) {
@@ -39,14 +53,53 @@ final class StickyMenuItemView: NSView {
         needsDisplay = true
     }
 
+    private func configure(_ field: NSTextField, _ text: String, _ color: NSColor, _ align: NSTextAlignment) {
+        field.stringValue = text
+        field.font = NSFont.menuFont(ofSize: 13)
+        field.textColor = color
+        field.alignment = align
+        field.lineBreakMode = .byTruncatingTail
+        field.isEditable = false
+        field.isBordered = false
+        field.drawsBackground = false
+    }
+
     private var labelColor: NSColor {
         isActionEnabled ? .labelColor : .tertiaryLabelColor
+    }
+
+    private func applyColors() {
+        if hovered, isActionEnabled {
+            label.textColor = .selectedMenuItemTextColor
+            detailLabel.textColor = .selectedMenuItemTextColor.withAlphaComponent(0.75)
+        } else {
+            label.textColor = labelColor
+            detailLabel.textColor = .tertiaryLabelColor
+        }
     }
 
     override func layout() {
         super.layout()
         let left: CGFloat = showsCheck ? 22 : 12
-        label.frame = NSRect(x: left, y: 3, width: bounds.width - left - 10, height: 18)
+        let rightPad: CGFloat = 12
+        let gap: CGFloat = 8
+        let detailW: CGFloat
+        if detailLabel.isHidden {
+            detailW = 0
+        } else {
+            detailLabel.sizeToFit()
+            detailW = min(detailLabel.fittingSize.width, bounds.width * 0.45)
+        }
+        let titleW = max(40, bounds.width - left - rightPad - (detailW > 0 ? detailW + gap : 0))
+        label.frame = NSRect(x: left, y: 3, width: titleW, height: 18)
+        if !detailLabel.isHidden {
+            detailLabel.frame = NSRect(
+                x: bounds.width - rightPad - detailW,
+                y: 3,
+                width: detailW,
+                height: 18
+            )
+        }
     }
 
     override func updateTrackingAreas() {
@@ -64,11 +117,13 @@ final class StickyMenuItemView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         hovered = isActionEnabled
+        applyColors()
         needsDisplay = true
     }
 
     override func mouseExited(with event: NSEvent) {
         hovered = false
+        applyColors()
         needsDisplay = true
     }
 
@@ -81,10 +136,8 @@ final class StickyMenuItemView: NSView {
         if hovered, isActionEnabled {
             NSColor.selectedContentBackgroundColor.setFill()
             dirtyRect.intersection(bounds).fill()
-            label.textColor = .selectedMenuItemTextColor
-        } else {
-            label.textColor = labelColor
         }
+        applyColors()
         if showsCheck, checked {
             let check = "✓" as NSString
             check.draw(

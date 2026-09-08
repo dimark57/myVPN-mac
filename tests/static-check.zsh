@@ -43,7 +43,7 @@ else
   ok S20
 fi
 
-for f in nas.zsh parse_conf.py render_config.py update_rules.py process.zsh env.zsh admin.zsh; do
+for f in nas.zsh parse_conf.py render_config.py settings.py update_rules.py process.zsh env.zsh admin.zsh; do
   [[ -f "$ROOT/lib/$f" ]] && ok "lib/$f" || bad "lib/$f" "missing"
 done
 
@@ -100,6 +100,7 @@ if ! /usr/bin/python3 "$ROOT/lib/render_config.py" \
   --home "$FIX/home.conf" \
   --geosite "$GEOSITE" \
   --geoip "$GEOIP" \
+  --settings "$FIX/settings.json" \
   -o "${OUT}/sing-box.json"; then
   bad S1 "render_config failed"
   exit "$fail"
@@ -146,7 +147,7 @@ assert final=="macbook"
 text=json.dumps(rules)
 assert "192.168.3.0/24" in text
 assert "10.13.13.0/24" in text and "10.57.0.0/24" in text
-assert "94.41.85.180/32" in text or "203.0.113.10/32" in text
+assert "203.0.113.10/32" in text or "203.0.113.20/32" in text
 # home outbound for 10.x
 home=any(r.get("outbound")=="home" and "10.13.13.0/24" in str(r.get("ip_cidr")) for r in rules)
 assert home
@@ -156,6 +157,21 @@ assert direct_lan
   ok S7-S11
 else
   bad S7-S11 "route rules"
+fi
+
+# S7b: TUN route_exclude_address must pin WG endpoints off utun
+if /usr/bin/python3 -c '
+import json,sys
+c=json.load(open(sys.argv[1]))
+tun=next((i for i in (c.get("inbounds") or []) if i.get("type")=="tun"), None)
+assert tun, "no tun"
+exc=set(tun.get("route_exclude_address") or [])
+assert any(x.endswith("/32") for x in exc), exc
+assert "192.168.3.0/24" in exc
+' "$JSON"; then
+  ok S7b
+else
+  bad S7b "route_exclude_address"
 fi
 
 # S16: DNS= from conf must not appear as system DNS list; fixture has 1.1.1.1 but only as dns-remote server ok

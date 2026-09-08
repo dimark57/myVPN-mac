@@ -16,6 +16,13 @@
 		A10000000000000000000050 /* LoginItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* LoginItemController.swift */; };
 		A10000000000000000000051 /* RulesStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000060 /* RulesStatus.swift */; };
 		A10000000000000000000052 /* StickyMenuItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000061 /* StickyMenuItemView.swift */; };
+		A10000000000000000000053 /* DoctorStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000062 /* DoctorStatus.swift */; };
+		A10000000000000000000054 /* DropLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000063 /* DropLogger.swift */; };
+		A10000000000000000000055 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000064 /* AppSettings.swift */; };
+		A10000000000000000000056 /* WireGuardProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000065 /* WireGuardProfileStore.swift */; };
+		A10000000000000000000057 /* ConnectionSettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000066 /* ConnectionSettingsWindowController.swift */; };
+		A10000000000000000000058 /* HelpWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000067 /* HelpWindowController.swift */; };
+		A10000000000000000000059 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000068 /* UpdateChecker.swift */; };
 		A1000000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +37,13 @@
 		A1000000000000000000002D /* LoginItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; };
 		A10000000000000000000060 /* RulesStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesStatus.swift; sourceTree = "<group>"; };
 		A10000000000000000000061 /* StickyMenuItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyMenuItemView.swift; sourceTree = "<group>"; };
+		A10000000000000000000062 /* DoctorStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorStatus.swift; sourceTree = "<group>"; };
+		A10000000000000000000063 /* DropLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropLogger.swift; sourceTree = "<group>"; };
+		A10000000000000000000064 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		A10000000000000000000065 /* WireGuardProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireGuardProfileStore.swift; sourceTree = "<group>"; };
+		A10000000000000000000066 /* ConnectionSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSettingsWindowController.swift; sourceTree = "<group>"; };
+		A10000000000000000000067 /* HelpWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; };
+		A10000000000000000000068 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -64,6 +78,13 @@
 				A1000000000000000000002D /* LoginItemController.swift */,
 				A10000000000000000000022 /* StatusSnapshot.swift */,
 				A10000000000000000000060 /* RulesStatus.swift */,
+				A10000000000000000000062 /* DoctorStatus.swift */,
+				A10000000000000000000063 /* DropLogger.swift */,
+				A10000000000000000000064 /* AppSettings.swift */,
+				A10000000000000000000065 /* WireGuardProfileStore.swift */,
+				A10000000000000000000066 /* ConnectionSettingsWindowController.swift */,
+				A10000000000000000000067 /* HelpWindowController.swift */,
+				A10000000000000000000068 /* UpdateChecker.swift */,
 				A10000000000000000000061 /* StickyMenuItemView.swift */,
 				A10000000000000000000028 /* Assets.xcassets */,
 				A10000000000000000000023 /* Info.plist */,
@@ -152,6 +173,13 @@
 				A10000000000000000000050 /* LoginItemController.swift in Sources */,
 				A10000000000000000000026 /* StatusSnapshot.swift in Sources */,
 				A10000000000000000000051 /* RulesStatus.swift in Sources */,
+				A10000000000000000000053 /* DoctorStatus.swift in Sources */,
+				A10000000000000000000054 /* DropLogger.swift in Sources */,
+				A10000000000000000000055 /* AppSettings.swift in Sources */,
+				A10000000000000000000056 /* WireGuardProfileStore.swift in Sources */,
+				A10000000000000000000057 /* ConnectionSettingsWindowController.swift in Sources */,
+				A10000000000000000000058 /* HelpWindowController.swift in Sources */,
+				A10000000000000000000059 /* UpdateChecker.swift in Sources */,
 				A10000000000000000000052 /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

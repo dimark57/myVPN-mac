@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent
 PROJ = ROOT / "MyVPN.xcodeproj"
 PROJ.mkdir(parents=True, exist_ok=True)
 
+# Keep IDs stable for existing files; append new ones for product UX sources.
 I = {
     "project": "A10000000000000000000001",
     "target": "A10000000000000000000002",
@@ -29,6 +30,13 @@ I = {
     "ref_login": "A1000000000000000000002D",
     "ref_rules": "A10000000000000000000060",
     "ref_sticky": "A10000000000000000000061",
+    "ref_doctor": "A10000000000000000000062",
+    "ref_drop": "A10000000000000000000063",
+    "ref_settings": "A10000000000000000000064",
+    "ref_wgstore": "A10000000000000000000065",
+    "ref_conn": "A10000000000000000000066",
+    "ref_help": "A10000000000000000000067",
+    "ref_update": "A10000000000000000000068",
     "bf_app": "A10000000000000000000024",
     "bf_cli": "A10000000000000000000025",
     "bf_status": "A10000000000000000000026",
@@ -39,6 +47,13 @@ I = {
     "bf_login": "A10000000000000000000050",
     "bf_rules": "A10000000000000000000051",
     "bf_sticky": "A10000000000000000000052",
+    "bf_doctor": "A10000000000000000000053",
+    "bf_drop": "A10000000000000000000054",
+    "bf_settings": "A10000000000000000000055",
+    "bf_wgstore": "A10000000000000000000056",
+    "bf_conn": "A10000000000000000000057",
+    "bf_help": "A10000000000000000000058",
+    "bf_update": "A10000000000000000000059",
     "build_proj_debug": "A10000000000000000000030",
     "build_proj_release": "A10000000000000000000031",
     "build_tgt_debug": "A10000000000000000000032",
@@ -65,6 +80,13 @@ pbx = f"""// !$*UTF8*$!
 		{I['bf_login']} /* LoginItemController.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_login']} /* LoginItemController.swift */; }};
 		{I['bf_rules']} /* RulesStatus.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_rules']} /* RulesStatus.swift */; }};
 		{I['bf_sticky']} /* StickyMenuItemView.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_sticky']} /* StickyMenuItemView.swift */; }};
+		{I['bf_doctor']} /* DoctorStatus.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_doctor']} /* DoctorStatus.swift */; }};
+		{I['bf_drop']} /* DropLogger.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_drop']} /* DropLogger.swift */; }};
+		{I['bf_settings']} /* AppSettings.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_settings']} /* AppSettings.swift */; }};
+		{I['bf_wgstore']} /* WireGuardProfileStore.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_wgstore']} /* WireGuardProfileStore.swift */; }};
+		{I['bf_conn']} /* ConnectionSettingsWindowController.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_conn']} /* ConnectionSettingsWindowController.swift */; }};
+		{I['bf_help']} /* HelpWindowController.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_help']} /* HelpWindowController.swift */; }};
+		{I['bf_update']} /* UpdateChecker.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_update']} /* UpdateChecker.swift */; }};
 		{I['bf_assets']} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {I['ref_assets']} /* Assets.xcassets */; }};
 /* End PBXBuildFile section */
 
@@ -79,6 +101,13 @@ pbx = f"""// !$*UTF8*$!
 		{I['ref_login']} /* LoginItemController.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemController.swift; sourceTree = "<group>"; }};
 		{I['ref_rules']} /* RulesStatus.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesStatus.swift; sourceTree = "<group>"; }};
 		{I['ref_sticky']} /* StickyMenuItemView.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyMenuItemView.swift; sourceTree = "<group>"; }};
+		{I['ref_doctor']} /* DoctorStatus.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoctorStatus.swift; sourceTree = "<group>"; }};
+		{I['ref_drop']} /* DropLogger.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropLogger.swift; sourceTree = "<group>"; }};
+		{I['ref_settings']} /* AppSettings.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; }};
+		{I['ref_wgstore']} /* WireGuardProfileStore.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireGuardProfileStore.swift; sourceTree = "<group>"; }};
+		{I['ref_conn']} /* ConnectionSettingsWindowController.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSettingsWindowController.swift; sourceTree = "<group>"; }};
+		{I['ref_help']} /* HelpWindowController.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; }};
+		{I['ref_update']} /* UpdateChecker.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; }};
 		{I['ref_info']} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; }};
 		{I['ref_assets']} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
@@ -113,6 +142,13 @@ pbx = f"""// !$*UTF8*$!
 				{I['ref_login']} /* LoginItemController.swift */,
 				{I['ref_status']} /* StatusSnapshot.swift */,
 				{I['ref_rules']} /* RulesStatus.swift */,
+				{I['ref_doctor']} /* DoctorStatus.swift */,
+				{I['ref_drop']} /* DropLogger.swift */,
+				{I['ref_settings']} /* AppSettings.swift */,
+				{I['ref_wgstore']} /* WireGuardProfileStore.swift */,
+				{I['ref_conn']} /* ConnectionSettingsWindowController.swift */,
+				{I['ref_help']} /* HelpWindowController.swift */,
+				{I['ref_update']} /* UpdateChecker.swift */,
 				{I['ref_sticky']} /* StickyMenuItemView.swift */,
 				{I['ref_assets']} /* Assets.xcassets */,
 				{I['ref_info']} /* Info.plist */,
@@ -201,6 +237,13 @@ pbx = f"""// !$*UTF8*$!
 				{I['bf_login']} /* LoginItemController.swift in Sources */,
 				{I['bf_status']} /* StatusSnapshot.swift in Sources */,
 				{I['bf_rules']} /* RulesStatus.swift in Sources */,
+				{I['bf_doctor']} /* DoctorStatus.swift in Sources */,
+				{I['bf_drop']} /* DropLogger.swift in Sources */,
+				{I['bf_settings']} /* AppSettings.swift in Sources */,
+				{I['bf_wgstore']} /* WireGuardProfileStore.swift in Sources */,
+				{I['bf_conn']} /* ConnectionSettingsWindowController.swift in Sources */,
+				{I['bf_help']} /* HelpWindowController.swift in Sources */,
+				{I['bf_update']} /* UpdateChecker.swift in Sources */,
 				{I['bf_sticky']} /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

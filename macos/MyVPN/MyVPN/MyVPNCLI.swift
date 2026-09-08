@@ -23,7 +23,7 @@ enum MyVPNCLI {
     static var binaryURL: URL { RuntimePaths.myvpnBinary }
 
     @discardableResult
-    static func run(_ args: [String], timeout: TimeInterval = 120) throws -> (stdout: String, stderr: String, status: Int32) {
+    static func run(_ args: [String], timeout: TimeInterval = 120, quiet: Bool = false) throws -> (stdout: String, stderr: String, status: Int32) {
         let path = binaryURL.path
         guard FileManager.default.isExecutableFile(atPath: path)
             || FileManager.default.fileExists(atPath: path) else {
@@ -33,7 +33,13 @@ enum MyVPNCLI {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [path] + args
-        process.environment = ProcessInfo.processInfo.environment
+        var env = ProcessInfo.processInfo.environment
+        // App owns UNUserNotifications — suppress CLI/osascript banners.
+        if quiet {
+            env["MYVPN_QUIET"] = "1"
+            env["MYVPN_NO_NOTIFY"] = "1"
+        }
+        process.environment = env
 
         let outPipe = Pipe()
         let errPipe = Pipe()
@@ -41,12 +47,13 @@ enum MyVPNCLI {
         process.standardError = errPipe
 
         try process.run()
-
-        let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.05)
+        let box = process
+        let wait = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            box.waitUntilExit()
+            wait.signal()
         }
-        if process.isRunning {
+        if wait.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
             throw MyVPNCLIError.failed(command: args.joined(separator: " "), exitCode: -1, stderr: "timeout")
         }
@@ -56,9 +63,9 @@ enum MyVPNCLI {
         return (stdout, stderr, process.terminationStatus)
     }
 
-    static func status() throws -> StatusSnapshot {
-        let result = try run(["status"], timeout: 30)
-        return StatusSnapshot.parse(stdout: result.stdout)
+    /// Menu bar / timer: native probe (no zsh). `includePublicIP` only when menu is open.
+    static func status(includePublicIP: Bool = false) -> StatusSnapshot {
+        StatusSnapshot.probe(includePublicIP: includePublicIP)
     }
 
     static func up() throws {
@@ -80,21 +87,36 @@ enum MyVPNCLI {
     static func mountNAS(force: Bool = false) throws {
         var args = ["mount-nas"]
         if force { args.append("--force") }
-        let result = try run(args, timeout: 120)
+        let result = try run(args, timeout: 120, quiet: true)
         if result.status != 0 {
             throw MyVPNCLIError.failed(command: "mount-nas", exitCode: result.status, stderr: result.stderr + result.stdout)
         }
     }
 
     static func updateRules() throws {
-        let result = try run(["update-rules"], timeout: 300)
+        let result = try run(["update-rules"], timeout: 300, quiet: true)
         if result.status != 0 {
             throw MyVPNCLIError.failed(command: "update-rules", exitCode: result.status, stderr: result.stderr + result.stdout)
         }
     }
 
+    /// Non-mutating interpretive report. Exit ≠ 0 is OK for WARN/FAIL if latest.txt written.
+    @discardableResult
+    static func doctor() throws -> String {
+        let result = try run(["doctor"], timeout: 60, quiet: true)
+        let combined = result.stdout + result.stderr
+        let latest = DoctorStatus.latestURL.path
+        if FileManager.default.fileExists(atPath: latest) {
+            return (try? String(contentsOfFile: latest, encoding: .utf8)) ?? combined
+        }
+        if result.status != 0 {
+            throw MyVPNCLIError.failed(command: "doctor", exitCode: result.status, stderr: combined)
+        }
+        return combined
+    }
+
     static func autostartEnabled() -> Bool {
-        (try? run(["autostart", "status"], timeout: 10))?.status == 0
+        FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.config/myvpn/auto-up-on-launch")
     }
 
     static func setAutostart(_ on: Bool) throws {
@@ -104,18 +126,18 @@ enum MyVPNCLI {
         } else {
             try? LoginItemController.setEnabled(false)
         }
-        let result = try run(["autostart", on ? "on" : "off"], timeout: 30)
+        let result = try run(["autostart", on ? "on" : "off"], timeout: 30, quiet: true)
         if result.status != 0 && on {
             throw MyVPNCLIError.failed(command: "autostart", exitCode: result.status, stderr: result.stderr + result.stdout)
         }
     }
 
     static func autoNASEnabled() -> Bool {
-        (try? run(["auto-nas", "status"], timeout: 10))?.status == 0
+        FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.config/myvpn/auto-mount-nas")
     }
 
     static func setAutoNAS(_ on: Bool) throws {
-        let result = try run(["auto-nas", on ? "on" : "off"], timeout: 30)
+        let result = try run(["auto-nas", on ? "on" : "off"], timeout: 30, quiet: true)
         if result.status != 0 && on {
             throw MyVPNCLIError.failed(command: "auto-nas", exitCode: result.status, stderr: result.stderr + result.stdout)
         }
@@ -123,5 +145,13 @@ enum MyVPNCLI {
 
     static func helperInstalled() -> Bool {
         MyVPNHelper.isAvailable
+    }
+
+    /// Regenerate sing-box.json from WG confs + settings.json
+    static func render() throws {
+        let result = try run(["render"], timeout: 60, quiet: true)
+        if result.status != 0 {
+            throw MyVPNCLIError.failed(command: "render", exitCode: result.status, stderr: result.stderr + result.stdout)
+        }
     }
 }

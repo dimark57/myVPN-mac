@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse WireGuard .conf (no secrets printed). AllowedIPs/DNS ignored for routing/DNS."""
+"""Parse WireGuard .conf (no secrets printed). AllowedIPs used by render for home split routes."""
 
 from __future__ import annotations
 

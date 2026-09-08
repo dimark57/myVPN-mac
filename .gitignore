@@ -3,6 +3,9 @@
 *.sqlite
 *.conf
 !tests/fixtures/*.conf
+settings.json
+!tests/fixtures/settings.json
+!share/settings.example.json
 .env
 secrets/
 
@@ -15,3 +18,4 @@ macos/MyVPN/MyVPN.xcodeproj/project.xcworkspace/
 # Local generated / logs accidentally under repo
 *.log
 sing-box.pid
+probes.json

@@ -112,6 +112,7 @@ myvpn_render() {
     --home "${MYVPN_HOME_CONF}" \
     --geosite "${MYVPN_GEOSITE_SRS}" \
     --geoip "${MYVPN_GEOIP_SRS}" \
+    --settings "${MYVPN_SETTINGS_JSON}" \
     -o "${MYVPN_CONFIG_JSON}"
 }
 
@@ -125,6 +126,7 @@ myvpn_config_fresh() {
   [[ "${out}" -nt "${MYVPN_GEOSITE_SRS}" ]] || return 1
   [[ "${out}" -nt "${MYVPN_GEOIP_SRS}" ]] || return 1
   [[ "${out}" -nt "${MYVPN_LIB}/render_config.py" ]] || return 1
+  [[ ! -f "${MYVPN_SETTINGS_JSON}" || "${out}" -nt "${MYVPN_SETTINGS_JSON}" ]] || return 1
   return 0
 }
 
@@ -135,6 +137,37 @@ myvpn_wait_running() {
     /bin/sleep 0.05
   done
   return 1
+}
+
+myvpn_default_gateway() {
+  /sbin/route -n get default 2>/dev/null | /usr/bin/awk '/gateway:/{print $2; exit}'
+}
+
+# Pin WG endpoint /32 via LAN gateway (belt+suspenders next to route_exclude_address).
+# Uses: MYVPN_CONFIG_JSON endpoints[].peers[].address, route(8)
+myvpn_pin_endpoint_routes() {
+  local gw host pin_cmd=""
+  gw="$(myvpn_default_gateway)"
+  [[ -n "$gw" ]] || return 0
+  [[ -f "${MYVPN_CONFIG_JSON}" ]] || return 0
+  while IFS= read -r host; do
+    [[ -n "$host" ]] || continue
+    pin_cmd+="/sbin/route -n delete -host ${host} >/dev/null 2>&1; "
+    pin_cmd+="/sbin/route -n add -host ${host} ${gw} >/dev/null 2>&1; "
+  done < <(/usr/bin/python3 -c '
+import json,sys
+c=json.load(open(sys.argv[1]))
+for ep in c.get("endpoints") or []:
+  for p in ep.get("peers") or []:
+    a=p.get("address")
+    if a: print(a)
+' "${MYVPN_CONFIG_JSON}")
+  [[ -n "$pin_cmd" ]] || return 0
+  if [[ "$(/usr/bin/id -u)" == "0" ]]; then
+    eval "$pin_cmd" || true
+  else
+    myvpn_run_admin "$pin_cmd" >/dev/null 2>&1 || true
+  fi
 }
 
 myvpn_cmd_up() {
@@ -174,6 +207,7 @@ myvpn_cmd_up() {
     return 1
   fi
   myvpn_dns_apply_tun
+  myvpn_pin_endpoint_routes
   print -r -- "up pid=$(/bin/cat "${MYVPN_PID_FILE}")"
   if [[ -z "${MYVPN_QUIET:-}" ]]; then
     myvpn_notify "myvpn up"
@@ -211,23 +245,32 @@ myvpn_public_ip() {
 myvpn_cmd_status() {
   local tun=0 macbook=0 home=0 nas=0 pub=""
   local ping_w="${MYVPN_PING_WAIT:-400}"
+  local hp mp ip_pid ipf
   if myvpn_is_running; then
     tun=1
   fi
-  if /sbin/ping -c 1 -W "${ping_w}" 10.13.13.1 >/dev/null 2>&1; then
-    home=1
+  # Parallel probes — sequential ping+curl was ~1–2s on menu / Alfred gv.
+  /sbin/ping -c 1 -W "${ping_w}" 10.13.13.1 >/dev/null 2>&1 &
+  hp=$!
+  /sbin/ping -c 1 -W "${ping_w}" 10.8.0.1 >/dev/null 2>&1 &
+  mp=$!
+  if [[ -z "${MYVPN_STATUS_SKIP_IP:-}" ]]; then
+    ipf="${TMPDIR:-/tmp}/myvpn-pubip.$$"
+    ( myvpn_public_ip > "${ipf}" ) &
+    ip_pid=$!
   fi
-  if /sbin/ping -c 1 -W "${ping_w}" 10.8.0.1 >/dev/null 2>&1; then
-    macbook=1
-  fi
+  wait "${hp}" && home=1 || true
+  wait "${mp}" && macbook=1 || true
   # Fast path: presence of mount point without blocking ls on stale SMB.
   if [[ -d "${MYVPN_NAS_MOUNT}/Project" ]]; then
     nas=1
   elif [[ -d "${MYVPN_NAS_MOUNT}" ]] && /sbin/mount | /usr/bin/grep -q " on ${MYVPN_NAS_MOUNT} "; then
     nas=1
   fi
-  if [[ -z "${MYVPN_STATUS_SKIP_IP:-}" ]]; then
-    pub="$(myvpn_public_ip)"
+  if [[ -n "${ip_pid:-}" ]]; then
+    wait "${ip_pid}" || true
+    pub="$(/bin/cat "${ipf}" 2>/dev/null | tr -d '\n')"
+    /bin/rm -f "${ipf}"
   fi
   print -r -- "tun=${tun}"
   print -r -- "macbook=${macbook}"

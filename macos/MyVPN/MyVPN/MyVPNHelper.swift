@@ -2,11 +2,20 @@ import Foundation
 
 enum MyVPNHelper {
     static let sockPath = "/var/run/myvpn-helper.sock"
+    /// Uses: install-helper.zsh SUPPORT path
+    static let supportBin = "/Library/Application Support/myVPN/myvpn-helper"
+    static let launchPlist = "/Library/LaunchDaemons/local.myvpn.mac.helper.plist"
 
     static var isAvailable: Bool {
         var st = stat()
         guard stat(sockPath, &st) == 0 else { return false }
         return (st.st_mode & S_IFMT) == S_IFSOCK
+    }
+
+    /// Installed files present but socket may be dead (needs reinstall / reload).
+    static var filesPresent: Bool {
+        let fm = FileManager.default
+        return fm.fileExists(atPath: supportBin) || fm.fileExists(atPath: launchPlist)
     }
 
     /// Login Item often starts before LaunchDaemon creates the socket — wait instead of giving up.
@@ -140,7 +149,7 @@ enum HelperError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notInstalled:
-            return "Системный помощник не установлен — Настройки → Установить помощник (один пароль)…"
+            return "Системный помощник не установлен — в меню нажми «Установить помощник» (один пароль)…"
         case .connectFailed(let s):
             return "Helper: \(s)"
         case .remote(let s):
