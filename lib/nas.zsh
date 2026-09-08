@@ -32,6 +32,7 @@ myvpn_nas_is_mounted() {
 
 # Timed probe — avoids Finder/CLI hang on stale smbfs (ENOTCONN).
 # 0 = alive, 1 = dead/missing, 2 = timeout (treat as stale).
+# 5s: 2s false-positive when Cursor/Spotlight sit on /Volumes/Nas.
 myvpn_nas_is_alive() {
   /usr/bin/python3 -c '
 import os, signal, sys
@@ -41,7 +42,7 @@ def boom(_s, _f):
     raise TimeoutError()
 
 signal.signal(signal.SIGALRM, boom)
-signal.alarm(2)
+signal.alarm(5)
 try:
     for name in ("Project", "data"):
         p = os.path.join(path, name)

@@ -13,6 +13,11 @@ struct DoctorStatus: Equatable, Sendable {
 
     var hasResult: Bool { !primary.isEmpty }
 
+    /// App-layer codes: menu «Незначительные», heal всё равно по PRIMARY (doc-9).
+    static let warnPrimaries: Set<String> = [
+        "NAS_STALE", "NAS_MOUNT_ONLY", "DNS_STALE", "EGRESS_NOT_VIA_MACBOOK",
+    ]
+
     /// Short menu badge (not the long notification headline).
     var primaryLine: String {
         if primary.isEmpty { return "—" }
@@ -195,6 +200,9 @@ struct DoctorStatus: Equatable, Sendable {
         } else if s.primary.hasPrefix("HEALTHY") {
             s.overall = "PASS"
             s.confidence = "high"
+        } else if Self.warnPrimaries.contains(s.primary) {
+            s.overall = "WARN"
+            s.confidence = "medium"
         } else if !s.primary.isEmpty {
             s.overall = "FAIL"
             s.confidence = "—"

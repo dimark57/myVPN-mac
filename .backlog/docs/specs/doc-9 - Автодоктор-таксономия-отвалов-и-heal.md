@@ -37,13 +37,13 @@ created_date: '2026-09-08 08:25'
 | `TUN_DOWN` | VPN «выкл», иконка off | pid/sing-box.pid=0, нет utun 172.19 | doctor + drops | `myvpn up` | — |
 | `MACBOOK_EGRESS_DOWN` | Нет интернета, NAS может жить | tun=1, pub IP empty, final=macbook | doctor + drops | `down`→`up` (1×) | если underlay endpoint ICMP=0 — сначала ждать WAN |
 | `HOME_PEER_DOWN` / `HOME_DOWN_MACBOOK_OK` | Нет NAS/Hub, интернет ок или тоже мёртв | ping home gw fail | doctor + drops | `down`→`up`; затем `mount-nas --force` | — |
-| `NAS_MOUNT_ONLY` | Home ок, шара не смонтирована | host ping ok, volume missing | doctor | `mount-nas --force` | full VPN restart |
-| `NAS_STALE` | SMB half-open после flap | listdir fail / stale | doctor | `mount-nas --force` | — |
-| `DNS_STALE` | digials/RU «не те» | Wi‑Fi DNS ≠ 172.19.0.1 | doctor | `flush-dns` | down/up первым |
+| `NAS_MOUNT_ONLY` | Home ок, шара не смонтирована | host ping ok, volume missing | doctor **WARN** | `mount-nas --force` | full VPN restart |
+| `NAS_STALE` | SMB half-open после flap | listdir fail / stale | doctor **WARN** | `mount-nas --force` | — |
+| `DNS_STALE` | digials/RU «не те» | Wi‑Fi DNS ≠ 172.19.0.1 | doctor **WARN** | `flush-dns` | down/up первым |
 | `CONFLICT_WG_APP` | Рандомные отвалы/маршруты | WG.app Connected + tun | doctor | **нет** — notify «выключи WG.app» | auto down/up |
 | `HEALTHY_BUT_ENDPOINT_VIA_TUN` | Пока ок; риск после sleep | route endpoint → utun* | doctor WARN | нет (профилактика); при следующем drop — heal по PRIMARY | ложный restart |
 | `HEALTHY_ICMP_FALSE_ALARM` | Кажется «peer down» | ping 10.8.0.1=0, но egress IP=endpoint | doctor PASS | **нет** | heal по ICMP |
-| `EGRESS_NOT_VIA_MACBOOK` | IP «не тот» | pub ≠ macbook ep | doctor | повторный doctor; heal только если remote DNS/egress реально мёртв | слепой restart |
+| `EGRESS_NOT_VIA_MACBOOK` | IP «не тот» | pub ≠ macbook ep | doctor **WARN** | повторный doctor; heal только если remote DNS/egress реально мёртв | слепой restart |
 | `MIXED` | Непонятно | низкая confidence | doctor | нет — только notify + отчёт | — |
 | *(новый, MVP2)* `UNDERLAY_DOWN` | Нет сети вообще | en0 down / endpoint ICMP=0 и нет default | drops | нет (ждать path up) | VPN restart |
 | *(новый, MVP2)* `SLEEP_WAKE_STALE` | После крышки «туннель есть — интернета нет» | wake event + egress fail в окне T | doctor | `down`→`up` | — |
@@ -93,7 +93,7 @@ notify + обновить DoctorStatus в меню
 | Doctor report | `~/.cache/myvpn-doctor/report-YYYYMMDD-HHMMSS.txt` | полный снимок + VERDICT |
 | Latest | `~/.cache/myvpn-doctor/latest.txt` | UI «открыть отчёт» |
 | State / DIFF | `state.json`, `state.prev.json` | флапы между запусками |
-| Drop journal | `drops.log`, `drop-state.json` | timeline 1→0 / AUTO_* |
+| Drop journal | `drops.log`, `drop-state.json` | timeline 1→0 / `DOCTOR primary=` / AUTO_* — **не чистить** |
 | sing-box | `~/.config/myvpn/sing-box.log` | handshake/failed/timeout |
 | Menu bar | `~/Library/Logs/myvpn-menubar.log` | UI/auto-up/heal |
 | Helper | `/var/log` / runtime helper logs | privileged up/down |
@@ -120,6 +120,8 @@ notify + обновить DoctorStatus в меню
 
 **Cooldown:** ≥5 мин между AUTO_HEAL; max 3 heal / час → потом «нужен человек» + отчёт.
 
+**OVERALL ≠ heal.** Меню «Значительные» только при FAIL (tun / egress / home / conflict). `NAS_*` / `DNS_STALE` / `EGRESS_NOT_VIA_MACBOOK` = **WARN** («Незначительные»), но PRIMARY не меняется — auto-heal по §5 всё равно идёт. Каждый `myvpn doctor` дописывает `DOCTOR primary=… overall=…` в `drops.log`; `report-*.txt` не чистить — по частоте кодов потом крутить таймауты и «N подряд».
+
 ## 6. UI: Настройки → Диагностика (контракт для реализации)
 
 1. Галочки: **Автодиагностика при отвале**, **Автовосстановление** (defaults ON; heal требует doctor ON).
@@ -138,5 +140,6 @@ notify + обновить DoctorStatus в меню
 
 - Таблица §2 отражена в UI Диагностики (справка/список).
 - Auto pipeline §3 при галочках ON.
-- Heal только по §5 + cooldown.
+- Heal только по §5 + cooldown (ключ = PRIMARY, не OVERALL).
 - Ложные ICMP (`HEALTHY_ICMP_FALSE_ALARM`) не триггерят heal.
+- `NAS_*` / `DNS_STALE` в UI = WARN; каждый doctor пишет `DOCTOR` в drops.log.

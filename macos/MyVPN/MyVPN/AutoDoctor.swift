@@ -54,6 +54,7 @@ enum AutoDoctor {
         ("MIXED", "Смешанная картина", "только отчёт"),
     ]
 
+    /// PRIMARY → heal. WARN/FAIL в меню не отменяет действие (doc-9).
     static func healKind(for primary: String) -> HealKind {
         switch primary {
         case "TUN_DOWN":

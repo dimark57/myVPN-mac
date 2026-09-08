@@ -177,8 +177,17 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     _doc_check "ping_macbook_gw" "2" "10.8.0.1 no reply (часто ICMP filter — смотри egress)"
   fi
   _doc_check "ping_home_gw" "$home" "10.13.13.1"
-  _doc_check "ping_macbook_endpoint" "$mb_ep_icmp" "${mb_host:-unknown} (VPS ICMP)"
-  _doc_check "ping_home_endpoint" "$hm_ep_icmp" "${hm_host:-unknown} (home WAN ICMP)"
+  # WAN ICMP is soft (filter/underlay) — overlay = gw ping + udp/egress. Uses: mb_ep_icmp, hm_ep_icmp
+  if (( mb_ep_icmp )); then
+    _doc_check "ping_macbook_endpoint" "1" "${mb_host:-unknown} (VPS ICMP)"
+  else
+    _doc_check "ping_macbook_endpoint" "2" "${mb_host:-unknown} no ICMP (фильтр/WAN — смотри udp/egress)"
+  fi
+  if (( hm_ep_icmp )); then
+    _doc_check "ping_home_endpoint" "1" "${hm_host:-unknown} (home WAN ICMP)"
+  else
+    _doc_check "ping_home_endpoint" "2" "${hm_host:-unknown} no ICMP (фильтр/WAN — смотри udp/home gw)"
+  fi
 
   if [[ -n "$pub" && -n "$mb_host" && "$pub" == "$mb_host" ]]; then
     egress_via_macbook=1
@@ -297,8 +306,11 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     _doc_check "dns_hub" "2" "home down — digials skip (backlog=${dns_backlog:-empty})"
   fi
   if (( tun )); then
-    if [[ -n "$dns_remote" ]]; then
+    if [[ "$dns_remote" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
       _doc_check "dns_remote_sample" "1" "cloudflare.com → ${dns_remote}"
+    elif [[ -n "$dns_remote" ]]; then
+      _doc_check "dns_remote_sample" "0" "cloudflare.com not A: ${dns_remote}"
+      _doc_evidence "remote DNS via TUN failed"
     else
       _doc_check "dns_remote_sample" "0" "cloudflare.com empty (dns-remote/macbook?)"
       _doc_evidence "remote DNS via TUN failed"
@@ -331,11 +343,11 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     case "$nas_alive_rc" in
       0) _doc_check "nas_alive" "1" "${MYVPN_NAS_MOUNT} listdir ok" ;;
       2)
-        _doc_check "nas_alive" "0" "stale mount (timeout)"
+        _doc_check "nas_alive" "2" "stale mount (timeout) — SMB, не VPN"
         _doc_evidence "NAS mount stale"
         ;;
       *)
-        _doc_check "nas_alive" "0" "mount present but not alive"
+        _doc_check "nas_alive" "2" "mount present but not alive — SMB, не VPN"
         _doc_evidence "NAS mount dead"
         ;;
     esac
@@ -343,10 +355,10 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     if (( home == 0 )); then
       _doc_check "nas_mount" "2" "не смонтирован (ожидаемо: home=0)"
     elif (( nas_host == 0 )); then
-      _doc_check "nas_mount" "0" "host unreachable при home=1"
+      _doc_check "nas_mount" "2" "host unreachable при home=1"
       _doc_evidence "NAS host down while home up"
     else
-      _doc_check "nas_mount" "0" "host ok, mount missing"
+      _doc_check "nas_mount" "2" "host ok, mount missing — SMB, не VPN"
       _doc_evidence "NAS not mounted"
     fi
   fi
@@ -526,14 +538,12 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
   elif (( WARN_COUNT > 0 )); then
     overall="WARN"
   fi
-  # Healthy false-alarm should not stay FAIL just from soft warns alone — overall already WARN/PASS
-  if [[ "$primary" == "HEALTHY" || "$primary" == "HEALTHY_ICMP_FALSE_ALARM" || "$primary" == "HEALTHY_BUT_ENDPOINT_VIA_TUN" ]]; then
-    if [[ "$primary" == "HEALTHY_BUT_ENDPOINT_VIA_TUN" ]]; then
-      overall="WARN"
-    else
-      overall="PASS"
-    fi
-  fi
+  # PRIMARY is the human severity. Heal maps PRIMARY, not OVERALL.
+  # FAIL = tun/egress/home/conflict. WARN = SMB/DNS/endpoint-via-tun (накапливаем в журнал).
+  case "$primary" in
+    HEALTHY|HEALTHY_ICMP_FALSE_ALARM) overall="PASS" ;;
+    HEALTHY_BUT_ENDPOINT_VIA_TUN|NAS_STALE|NAS_MOUNT_ONLY|DNS_STALE|EGRESS_NOT_VIA_MACBOOK) overall="WARN" ;;
+  esac
 
   {
     print -r -- ""
@@ -573,16 +583,22 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     print -r -- ""
     print -r -- "Как читать:"
     print -r -- "  HEALTHY* — сейчас каналы живы; смотри WARN про endpoint→utun."
-    print -r -- "  HOME_PEER_DOWN / HOME_DOWN_MACBOOK_OK — «отвал NAS/Hub»."
-    print -r -- "  MACBOOK_EGRESS_DOWN — «отвал интернета» при живом меню."
-    print -r -- "  NAS_STALE / NAS_MOUNT_ONLY — только SMB."
+    print -r -- "  HOME_PEER_DOWN / HOME_DOWN_MACBOOK_OK — «отвал NAS/Hub» (FAIL)."
+    print -r -- "  MACBOOK_EGRESS_DOWN — «отвал интернета» при живом меню (FAIL)."
+    print -r -- "  NAS_STALE / NAS_MOUNT_ONLY / DNS_STALE — WARN, heal по PRIMARY."
     print -r -- "  CONFLICT_WG_APP — не мешай WG.app и myVPN."
-    print -r -- "  DIFF — что изменилось с прошлого doctor (ключ к флапам)."
+    print -r -- "  DIFF / drops.log — флапы и AUTO_*; отчёты не чистить."
     print -r -- ""
     print -r -- "Full: ${report_file}"
     print -r -- "Latest: ${latest}"
     print -r -- "State: ${state_file}"
   } | /usr/bin/tee -a "${report_file}" | /usr/bin/tee "${latest}"
+
+  # Journal every run (CLI + app). Heal still keys on PRIMARY; AUTO_* пишет Swift.
+  # Uses: report_dir/drops.log — не ротировать, анализ частоты кодов позже.
+  {
+    print -r -- "[$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)] DOCTOR primary=${primary} overall=${overall} fail=${FAIL_COUNT} warn=${WARN_COUNT}"
+  } >> "${report_dir}/drops.log" 2>/dev/null || true
 
   # No osascript banners — app UNUserNotification / CLI stdout only.
 
