@@ -28,8 +28,9 @@ GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
 ## Runtime
 
 - **Раздача пользователям:** только GitHub Releases (`myVPN.app.zip`). Не `install-app.zsh` как install path.
-- **Обновление у пользователя:** кнопка «Проверить обновление» (`UpdateChecker` → latest Release). Тихого auto-check при старте нет.
-- **Публикация релиза:** `macos/MyVPN/release.zsh [version]`
+- **Обновление у пользователя (включая этот Mac как «прод»):** только кнопка «Проверить обновление» после нового GitHub Release.
+- **Запрещено агенту/деплою:** копировать бинарь в `~/Applications` через `install-app.zsh` / `ditto` / `open` ради «подтянуть фикс». Локальный `install-app.zsh` — только явная отладка сборки по запросу «собери локально», не способ доставки.
+- **Публикация релиза:** `macos/MyVPN/release.zsh [version]` → пользователь жмёт обновление.
 - App: `~/Applications/myVPN.app`, runtime в `Contents/Resources/runtime`
 - CLI symlink: `~/.local/bin/myvpn` → `~/.local/share/myvpn`
 - Helper: LaunchDaemon `local.myvpn.mac.helper`

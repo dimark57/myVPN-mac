@@ -1,4 +1,51 @@
 {
+  "channels": [
+    {
+      "id": "macbook",
+      "name": "Egress",
+      "file": "macbook.conf",
+      "is_default": true,
+      "ping": ""
+    },
+    {
+      "id": "home",
+      "name": "Home",
+      "file": "home.conf",
+      "is_default": false,
+      "ping": ""
+    }
+  ],
+  "routes": [
+    {
+      "id": "lan",
+      "type": "cidr",
+      "match": ["192.168.0.0/16"],
+      "via": "direct",
+      "note": "LAN"
+    },
+    {
+      "id": "home-nets",
+      "type": "cidr",
+      "match": ["10.13.13.0/24", "10.57.0.0/24"],
+      "via": "home",
+      "note": "Home / NAS"
+    },
+    {
+      "id": "geosite",
+      "type": "rule_set",
+      "match": "geosite-ru",
+      "via": "direct",
+      "note": "RU domains"
+    },
+    {
+      "id": "geoip",
+      "type": "rule_set",
+      "match": "geoip-ru",
+      "via": "direct",
+      "note": "RU IP"
+    }
+  ],
+  "dns_via": "home",
   "lan_cidrs": ["192.168.0.0/16"],
   "nas_host": "",
   "nas_share": "Nas",

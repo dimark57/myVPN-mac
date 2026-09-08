@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""User routing/NAS settings (~/.config/myvpn/settings.json). No WG secrets."""
+"""User settings (~/.config/myvpn/settings.json). No WG secrets.
+
+Scalars: NAS/DNS. Topology: channels[] + routes[] (see channels.py).
+"""
 
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-DEFAULTS: dict[str, Any] = {
+SCALAR_DEFAULTS: dict[str, Any] = {
     "lan_cidrs": [],
     "nas_host": "",
     "nas_share": "Nas",
@@ -19,7 +22,11 @@ DEFAULTS: dict[str, Any] = {
     "dns_suffixes": [],
     "home_ping": "",
     "macbook_ping": "",
+    "dns_via": "",
 }
+
+# Back-compat alias
+DEFAULTS = SCALAR_DEFAULTS
 
 
 def settings_path() -> Path:
@@ -29,13 +36,15 @@ def settings_path() -> Path:
 
 def load_settings(path: Path | None = None) -> dict[str, Any]:
     p = path or settings_path()
-    out = dict(DEFAULTS)
+    out = dict(SCALAR_DEFAULTS)
+    raw: dict[str, Any] = {}
     if p.is_file():
         try:
-            raw = json.loads(p.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                for k, v in raw.items():
-                    if k in DEFAULTS:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                raw = data
+                for k, v in data.items():
+                    if k in SCALAR_DEFAULTS:
                         out[k] = v
         except (OSError, json.JSONDecodeError):
             pass
@@ -54,13 +63,31 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
         out["home_ping"] = os.environ["MYVPN_HOME_PING"].strip()
     if os.environ.get("MYVPN_MACBOOK_PING"):
         out["macbook_ping"] = os.environ["MYVPN_MACBOOK_PING"].strip()
+    # Pass through topology if present (render / UI)
+    for k in ("channels", "routes", "dns_via"):
+        if k in raw:
+            out[k] = raw[k]
     return out
 
 
 def save_settings(data: dict[str, Any], path: Path | None = None) -> Path:
     p = path or settings_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    clean = {k: data.get(k, DEFAULTS[k]) for k in DEFAULTS}
+    existing: dict[str, Any] = {}
+    if p.is_file():
+        try:
+            existing = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(existing, dict):
+                existing = {}
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+    clean = dict(existing)
+    for k in SCALAR_DEFAULTS:
+        if k in data:
+            clean[k] = data[k]
+    for k in ("channels", "routes", "dns_via"):
+        if k in data:
+            clean[k] = data[k]
     p.write_text(json.dumps(clean, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     p.chmod(0o600)
     return p

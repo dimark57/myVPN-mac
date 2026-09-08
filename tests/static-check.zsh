@@ -43,7 +43,7 @@ else
   ok S20
 fi
 
-for f in nas.zsh parse_conf.py render_config.py settings.py update_rules.py process.zsh env.zsh admin.zsh; do
+for f in nas.zsh parse_conf.py render_config.py settings.py channels.py update_rules.py process.zsh env.zsh admin.zsh; do
   [[ -f "$ROOT/lib/$f" ]] && ok "lib/$f" || bad "lib/$f" "missing"
 done
 
@@ -96,8 +96,7 @@ else
 fi
 
 if ! /usr/bin/python3 "$ROOT/lib/render_config.py" \
-  --macbook "$FIX/macbook.conf" \
-  --home "$FIX/home.conf" \
+  --wg-dir "$FIX" \
   --geosite "$GEOSITE" \
   --geoip "$GEOIP" \
   --settings "$FIX/settings.json" \

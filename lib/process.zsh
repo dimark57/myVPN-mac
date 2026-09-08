@@ -108,8 +108,7 @@ myvpn_ensure_dirs() {
 
 myvpn_render() {
   /usr/bin/python3 "${MYVPN_LIB}/render_config.py" \
-    --macbook "${MYVPN_MACBOOK_CONF}" \
-    --home "${MYVPN_HOME_CONF}" \
+    --wg-dir "${MYVPN_WG_DIR}" \
     --geosite "${MYVPN_GEOSITE_SRS}" \
     --geoip "${MYVPN_GEOIP_SRS}" \
     --settings "${MYVPN_SETTINGS_JSON}" \
@@ -119,14 +118,36 @@ myvpn_render() {
 # Skip render/check when inputs are older than existing JSON (hot up path).
 # Also invalidate when render_config.py itself changed (DNS/route logic).
 myvpn_config_fresh() {
-  local out="${MYVPN_CONFIG_JSON}"
+  local out="${MYVPN_CONFIG_JSON}" conf
   [[ -f "${out}" ]] || return 1
-  [[ "${out}" -nt "${MYVPN_MACBOOK_CONF}" ]] || return 1
-  [[ "${out}" -nt "${MYVPN_HOME_CONF}" ]] || return 1
+  [[ "${out}" -nt "${MYVPN_LIB}/render_config.py" ]] || return 1
+  [[ "${out}" -nt "${MYVPN_LIB}/channels.py" ]] || return 1
   [[ "${out}" -nt "${MYVPN_GEOSITE_SRS}" ]] || return 1
   [[ "${out}" -nt "${MYVPN_GEOIP_SRS}" ]] || return 1
-  [[ "${out}" -nt "${MYVPN_LIB}/render_config.py" ]] || return 1
   [[ ! -f "${MYVPN_SETTINGS_JSON}" || "${out}" -nt "${MYVPN_SETTINGS_JSON}" ]] || return 1
+  # All channel confs from settings (fallback: legacy two files)
+  while IFS= read -r conf; do
+    [[ -n "$conf" ]] || continue
+    [[ -f "$conf" ]] || return 1
+    [[ "${out}" -nt "$conf" ]] || return 1
+  done < <(/usr/bin/python3 - "${MYVPN_SETTINGS_JSON}" "${MYVPN_WG_DIR}" <<'PY'
+import json, sys
+from pathlib import Path
+settings, wg = Path(sys.argv[1]), Path(sys.argv[2])
+channels = []
+if settings.is_file():
+    try:
+        channels = json.load(open(settings, encoding="utf-8")).get("channels") or []
+    except Exception:
+        channels = []
+if not channels:
+    for name in ("macbook.conf", "home.conf"):
+        print(wg / name)
+else:
+    for c in channels:
+        print(wg / c.get("file", f"{c.get('id')}.conf"))
+PY
+)
   return 0
 }
 
@@ -180,8 +201,28 @@ myvpn_cmd_up() {
     print -r -- "sing-box not found" >&2
     return 1
   fi
-  if [[ ! -f "${MYVPN_MACBOOK_CONF}" || ! -f "${MYVPN_HOME_CONF}" ]]; then
-    print -r -- "missing ${MYVPN_MACBOOK_CONF} or ${MYVPN_HOME_CONF}" >&2
+  # Require every channel .conf listed in settings (or legacy pair).
+  if ! /usr/bin/python3 - "${MYVPN_SETTINGS_JSON}" "${MYVPN_WG_DIR}" <<'PY'
+import json, sys
+from pathlib import Path
+settings, wg = Path(sys.argv[1]), Path(sys.argv[2])
+channels = []
+if settings.is_file():
+    try:
+        channels = json.load(open(settings, encoding="utf-8")).get("channels") or []
+    except Exception:
+        channels = []
+paths = []
+if not channels:
+    paths = [wg / "macbook.conf", wg / "home.conf"]
+else:
+    paths = [wg / c.get("file", f"{c.get('id')}.conf") for c in channels]
+missing = [str(p) for p in paths if not p.is_file()]
+if missing:
+    print("missing " + ", ".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+PY
+  then
     return 1
   fi
   if [[ ! -f "${MYVPN_GEOSITE_SRS}" || ! -f "${MYVPN_GEOIP_SRS}" ]]; then

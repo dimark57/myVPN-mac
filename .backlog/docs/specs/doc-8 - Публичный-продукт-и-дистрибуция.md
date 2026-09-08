@@ -15,11 +15,12 @@ updated_date: '2026-09-08 12:00'
 |---------|--------|--------|
 | Remote | `dimark57/myVPN-mac` (сначала private, public после scrub) | Один дом исходников + Releases |
 | Секреты | Только `~/.config/wireguard/*.conf`; `*.conf` в gitignore | Ключи не в облаке |
-| Топология | `~/.config/myvpn/settings.json` + AllowedIPs из home.conf | Чужие сети без хардкода digials/LAN в коде |
-| Home routes | `AllowedIPs` профиля home (не 0.0.0.0/0) | Как у нормального WG split-клиенте |
-| UI конфигов | Окно: импорт / буфер / правка текста | Паритет с WireGuard.app по вводу |
+| Топология | `settings.json`: `channels[]` + `routes[]` (+ NAS/DNS scalars) | Чужие сети без хардкода; миграция с macbook/home.conf |
+| Маршруты | Только `routes[]`; AllowedIPs в `.conf` **не** источник route | Как Clash/sing-box |
+| UI конфигов | Окно: Каналы / Маршруты / NAS·DNS / Справка | N каналов, ручные routes |
 | Обновление app | GitHub Releases `myVPN.app.zip` + кнопка «Проверить обновление» (не silent auto) | Деплой = новый Release; пользователь жмёт кнопку |
-| Раздача | Только Releases; `install-app.zsh` — dev/debug | README не учит собирать из исходников |
+| Раздача | Только Releases; `install-app.zsh` — только явная отладка / внутри `release.zsh` | README не учит собирать из исходников |
+| Доставка на Mac владельца | Не «закатывать фикс» через install; после `release.zsh` local==Release, дальше только кнопка | Иначе откаты |
 | Списки RU | Отдельный пункт меню | Не путать с обновлением приложения |
 | README | Маркетинг + install/update/configure | Без backlog/CLI/личных IP |
 | Подпись | Ad-hoc (`codesign -`) в v0 | Нет Developer ID; Gatekeeper warning OK |

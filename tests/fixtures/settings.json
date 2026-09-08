@@ -1,11 +1,67 @@
 {
-  "lan_cidrs": ["192.168.3.0/24"],
+  "lan_cidrs": [
+    "192.168.3.0/24"
+  ],
   "nas_host": "10.57.0.100",
   "nas_share": "Nas",
   "nas_mount": "/Volumes/Nas",
   "nas_user": "NAS",
   "dns_home_server": "10.57.0.100",
-  "dns_suffixes": ["example.test"],
+  "dns_suffixes": [
+    "example.test"
+  ],
   "home_ping": "10.13.13.1",
-  "macbook_ping": "10.8.0.1"
+  "macbook_ping": "10.8.0.1",
+  "dns_via": "home",
+  "channels": [
+    {
+      "id": "macbook",
+      "name": "Egress",
+      "file": "macbook.conf",
+      "is_default": true,
+      "ping": "10.8.0.1"
+    },
+    {
+      "id": "home",
+      "name": "Home",
+      "file": "home.conf",
+      "is_default": false,
+      "ping": "10.13.13.1"
+    }
+  ],
+  "routes": [
+    {
+      "id": "lan1",
+      "type": "cidr",
+      "match": [
+        "192.168.3.0/24"
+      ],
+      "via": "direct",
+      "note": "LAN"
+    },
+    {
+      "id": "home1",
+      "type": "cidr",
+      "match": [
+        "10.13.13.0/24",
+        "10.57.0.0/24"
+      ],
+      "via": "home",
+      "note": "Home"
+    },
+    {
+      "id": "gs",
+      "type": "rule_set",
+      "match": "geosite-ru",
+      "via": "direct",
+      "note": "RU domains"
+    },
+    {
+      "id": "gi",
+      "type": "rule_set",
+      "match": "geoip-ru",
+      "via": "direct",
+      "note": "RU IP"
+    }
+  ]
 }

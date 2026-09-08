@@ -22,7 +22,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let configDir = NSHomeDirectory() + "/.config/myvpn"
     private let menuWidth: CGFloat = 320
     private var connectionSettingsWC: ConnectionSettingsWindowController?
-    private var helpWC: HelpWindowController?
     private var updateStatusLine = "Проверить обновление"
 
     private var isBusy: Bool { busyKey != nil }
@@ -537,16 +536,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func openConnectionSettings() {
         if connectionSettingsWC == nil {
-            connectionSettingsWC = ConnectionSettingsWindowController()
+            connectionSettingsWC = ConnectionSettingsWindowController(section: .channels)
         }
-        connectionSettingsWC?.show()
+        connectionSettingsWC?.show(section: .channels)
     }
 
     private func openHelp() {
-        if helpWC == nil {
-            helpWC = HelpWindowController()
-        }
-        helpWC?.show()
+        HelpWindowController.show(using: &connectionSettingsWC)
     }
 
     private func checkForUpdate() {

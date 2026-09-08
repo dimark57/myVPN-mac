@@ -13,17 +13,17 @@
 | `.backlog/docs/specs/` | Engineering specs (agents + humans) |
 | `AGENTS.md` | Agent/developer contour |
 
-## Publish a release (единственный путь «деплоя»)
+## Publish a release (единственный путь доставки на Mac)
 
 ```bash
 # нужен gh auth, remote dimark57/myVPN-mac
-macos/MyVPN/release.zsh 0.3.0
+macos/MyVPN/release.zsh 0.3.1
 ```
 
-Скрипт: `install-app.zsh` → zip → `gh release create` с asset `myVPN.app.zip`.  
-После этого у пользователей кнопка **Проверить обновление** подтягивает релиз.
+Скрипт: сборка → zip → `gh release create` с asset `myVPN.app.zip`.  
+На Mac пользователя (и на «проде» владельца): только **Проверить обновление** в меню.
 
-Локальная пересборка без публикации (`install-app.zsh`) — только для отладки на своей машине, не способ раздачи.
+**Не делать:** `install-app.zsh` / ручной `cp` в `~/Applications` как способ «закатить фикс». Это обход релиза и рассинхрон с GitHub. `install-app.zsh` — только локальная проверка сборки, если явно попросили «собери локально».
 
 ## CLI (local runtime)
 
