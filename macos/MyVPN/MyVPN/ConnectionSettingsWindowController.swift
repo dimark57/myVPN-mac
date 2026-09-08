@@ -92,9 +92,9 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private func buildUI() {
         guard let content = window?.contentView else { return }
 
-        let root = NSStackView()
-        root.orientation = .vertical
-        root.spacing = 0
+        // Fixed shell: header / body(sidebar+pane) / footer. Body height = window leftover,
+        // so switching sections never moves the sidebar (same content frame for every item).
+        let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(root)
         NSLayoutConstraint.activate([
@@ -109,6 +109,9 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         header.alignment = .leading
         header.spacing = 4
         header.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 12, right: 20)
+        header.translatesAutoresizingMaskIntoConstraints = false
+        header.setContentHuggingPriority(.required, for: .vertical)
+        header.setContentCompressionResistancePriority(.required, for: .vertical)
         let title = NSTextField(labelWithString: "Настройки")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         let sub = NSTextField(wrappingLabelWithString:
@@ -118,21 +121,20 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         sub.preferredMaxLayoutWidth = 740
         header.addArrangedSubview(title)
         header.addArrangedSubview(sub)
-        root.addArrangedSubview(header)
-        root.addArrangedSubview(Self.hairline())
 
-        let body = NSStackView()
-        body.orientation = .horizontal
-        body.spacing = 0
-        body.alignment = .top
+        let headerLine = Self.hairline()
+        let footerLine = Self.hairline()
+
+        let body = NSView()
         body.translatesAutoresizingMaskIntoConstraints = false
+        body.setContentHuggingPriority(.defaultLow, for: .vertical)
+        body.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         let sideScroll = NSScrollView()
         sideScroll.hasVerticalScroller = true
         sideScroll.borderType = .noBorder
         sideScroll.drawsBackground = false
         sideScroll.translatesAutoresizingMaskIntoConstraints = false
-        sideScroll.widthAnchor.constraint(equalToConstant: 160).isActive = true
 
         sidebar = NSTableView()
         sidebar.headerView = nil
@@ -145,24 +147,41 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         sidebar.target = self
         sidebar.action = #selector(sidebarClicked)
         sideScroll.documentView = sidebar
-        body.addArrangedSubview(sideScroll)
 
-        body.addArrangedSubview(Self.vline())
+        let divider = Self.vline()
 
         contentBox = NSView()
         contentBox.translatesAutoresizingMaskIntoConstraints = false
         contentBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        body.addArrangedSubview(contentBox)
-        root.addArrangedSubview(body)
-        body.heightAnchor.constraint(greaterThanOrEqualToConstant: 380).isActive = true
+        contentBox.setContentHuggingPriority(.defaultLow, for: .vertical)
 
-        root.addArrangedSubview(Self.hairline())
+        body.addSubview(sideScroll)
+        body.addSubview(divider)
+        body.addSubview(contentBox)
+        NSLayoutConstraint.activate([
+            sideScroll.leadingAnchor.constraint(equalTo: body.leadingAnchor),
+            sideScroll.topAnchor.constraint(equalTo: body.topAnchor),
+            sideScroll.bottomAnchor.constraint(equalTo: body.bottomAnchor),
+            sideScroll.widthAnchor.constraint(equalToConstant: 160),
+
+            divider.leadingAnchor.constraint(equalTo: sideScroll.trailingAnchor),
+            divider.topAnchor.constraint(equalTo: body.topAnchor),
+            divider.bottomAnchor.constraint(equalTo: body.bottomAnchor),
+
+            contentBox.leadingAnchor.constraint(equalTo: divider.trailingAnchor),
+            contentBox.trailingAnchor.constraint(equalTo: body.trailingAnchor),
+            contentBox.topAnchor.constraint(equalTo: body.topAnchor),
+            contentBox.bottomAnchor.constraint(equalTo: body.bottomAnchor),
+        ])
 
         let footer = NSStackView()
         footer.orientation = .horizontal
         footer.spacing = 10
         footer.alignment = .centerY
         footer.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 16, right: 20)
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.setContentHuggingPriority(.required, for: .vertical)
+        footer.setContentCompressionResistancePriority(.required, for: .vertical)
 
         let save = NSButton(title: "Сохранить", target: self, action: #selector(saveAll))
         save.keyEquivalent = "\r"
@@ -185,19 +204,51 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         sp.setContentHuggingPriority(.defaultLow, for: .horizontal)
         footer.addArrangedSubview(sp)
         footer.addArrangedSubview(close)
-        root.addArrangedSubview(footer)
+
+        root.addSubview(header)
+        root.addSubview(headerLine)
+        root.addSubview(body)
+        root.addSubview(footerLine)
+        root.addSubview(footer)
+        NSLayoutConstraint.activate([
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            header.topAnchor.constraint(equalTo: root.topAnchor),
+
+            headerLine.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            headerLine.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            headerLine.topAnchor.constraint(equalTo: header.bottomAnchor),
+
+            body.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            body.topAnchor.constraint(equalTo: headerLine.bottomAnchor),
+            body.bottomAnchor.constraint(equalTo: footerLine.topAnchor),
+            body.heightAnchor.constraint(greaterThanOrEqualToConstant: 380),
+
+            footerLine.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            footerLine.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            footerLine.bottomAnchor.constraint(equalTo: footer.topAnchor),
+
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+        ])
     }
 
     private static func hairline() -> NSBox {
         let b = NSBox()
         b.boxType = .separator
+        b.translatesAutoresizingMaskIntoConstraints = false
         b.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        b.setContentHuggingPriority(.required, for: .vertical)
+        b.setContentCompressionResistancePriority(.required, for: .vertical)
         return b
     }
 
     private static func vline() -> NSBox {
         let b = NSBox()
         b.boxType = .separator
+        b.translatesAutoresizingMaskIntoConstraints = false
         b.widthAnchor.constraint(equalToConstant: 1).isActive = true
         return b
     }
@@ -228,13 +279,34 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         case .update: pane = makeUpdatePane()
         case .help: pane = makeHelpPane()
         }
-        pane.translatesAutoresizingMaskIntoConstraints = false
-        contentBox.addSubview(pane)
+        // Same content frame for every menu item. Channels/Routes/Help fill height;
+        // short panes stay top-aligned via spacer so sidebar never jumps.
+        let host: NSView
+        switch section {
+        case .channels, .routes, .help:
+            host = pane
+        case .systemHelper, .shares, .update:
+            let shell = NSStackView()
+            shell.orientation = .vertical
+            shell.alignment = .width
+            shell.distribution = .fill
+            shell.spacing = 0
+            pane.setContentHuggingPriority(.required, for: .vertical)
+            shell.addArrangedSubview(pane)
+            let spacer = NSView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            shell.addArrangedSubview(spacer)
+            host = shell
+        }
+        host.translatesAutoresizingMaskIntoConstraints = false
+        host.setContentHuggingPriority(.defaultLow, for: .vertical)
+        host.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        contentBox.addSubview(host)
         NSLayoutConstraint.activate([
-            pane.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
-            pane.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
-            pane.topAnchor.constraint(equalTo: contentBox.topAnchor),
-            pane.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
+            host.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
+            host.topAnchor.constraint(equalTo: contentBox.topAnchor),
+            host.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
         ])
     }
 
@@ -245,6 +317,8 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         wrap.orientation = .vertical
         wrap.spacing = 8
         wrap.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        wrap.distribution = .fill
+        wrap.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         autostartCheck = NSButton(
             checkboxWithTitle: "Автоподнятие после перезагрузки",
@@ -252,23 +326,29 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
             action: #selector(toggleAutostart)
         )
         autostartCheck.state = (MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled) ? .on : .off
+        autostartCheck.setContentHuggingPriority(.required, for: .vertical)
         wrap.addArrangedSubview(autostartCheck)
 
         let root = NSStackView()
         root.orientation = .horizontal
         root.spacing = 12
         root.alignment = .top
+        root.distribution = .fill
+        root.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let left = NSStackView()
         left.orientation = .vertical
         left.spacing = 8
+        left.distribution = .fill
         left.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        left.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
         channelTable = NSTableView()
         channelTable.headerView = nil
         channelTable.allowsEmptySelection = false
@@ -284,6 +364,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let btns = NSStackView()
         btns.orientation = .horizontal
         btns.spacing = 6
+        btns.setContentHuggingPriority(.required, for: .vertical)
         let add = NSButton(title: "+", target: self, action: #selector(addChannel))
         add.bezelStyle = .rounded
         add.controlSize = .small
@@ -298,11 +379,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let right = NSStackView()
         right.orientation = .vertical
         right.spacing = 8
+        right.distribution = .fill
         right.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        right.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let meta = NSGridView()
         meta.columnSpacing = 10
         meta.rowSpacing = 6
+        meta.setContentHuggingPriority(.required, for: .vertical)
         nameField = field("")
         nameField.placeholderString = "Имя канала"
         idLabel = NSTextField(labelWithString: "")
@@ -321,6 +405,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let bar = NSStackView()
         bar.orientation = .horizontal
         bar.spacing = 8
+        bar.setContentHuggingPriority(.required, for: .vertical)
         let hint = NSTextField(labelWithString: "Шаблон WireGuard — одинаковый для всех каналов")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
@@ -344,7 +429,8 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         escroll.borderType = .bezelBorder
         escroll.documentView = confEditor
         escroll.translatesAutoresizingMaskIntoConstraints = false
-        escroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+        escroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        escroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
         right.addArrangedSubview(escroll)
 
         root.addArrangedSubview(right)
@@ -470,19 +556,23 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         root.orientation = .vertical
         root.spacing = 10
         root.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        root.distribution = .fill
+        root.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let intro = NSTextField(wrappingLabelWithString:
             "Порядок сверху вниз. via = id канала или direct. Rule-set: geosite-ru / geoip-ru после «Обновить RU».")
         intro.font = .systemFont(ofSize: 11)
         intro.textColor = .secondaryLabelColor
         intro.preferredMaxLayoutWidth = 580
+        intro.setContentHuggingPriority(.required, for: .vertical)
         root.addArrangedSubview(intro)
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
         routeTable = NSTableView()
         for (id, title, w) in [("m", "Match", 280), ("v", "Via", 100), ("n", "Note", 140)] as [(String, String, CGFloat)] {
             let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
@@ -500,6 +590,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let btns = NSStackView()
         btns.orientation = .horizontal
         btns.spacing = 6
+        btns.setContentHuggingPriority(.required, for: .vertical)
         for (t, a) in [("+", #selector(addRoute)), ("−", #selector(removeRoute)), ("↑", #selector(moveRouteUp)), ("↓", #selector(moveRouteDown))] as [(String, Selector)] {
             let b = NSButton(title: t, target: self, action: a)
             b.bezelStyle = .rounded
@@ -511,6 +602,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let form = NSGridView()
         form.columnSpacing = 10
         form.rowSpacing = 6
+        form.setContentHuggingPriority(.required, for: .vertical)
         routeTypePopup = NSPopUpButton()
         routeTypePopup.addItems(withTitles: ["CIDR", "rule_set"])
         routeMatchField = field("")
@@ -811,7 +903,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         root.addArrangedSubview(sectionTitle("Обновление приложения"))
         let intro = NSTextField(wrappingLabelWithString:
-            "Только GitHub Releases (myVPN.app.zip). Тихой фоновой проверки нет — жми кнопку.")
+            "Источник: GitHub Releases (myVPN.app.zip).\nАвтопроверка при запуске и каждый час — при новой версии ставится сама. Кнопка ниже — вручную.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
         intro.preferredMaxLayoutWidth = 520
@@ -966,7 +1058,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     • Channels — conf + автоподнятие после перезагрузки
     • Routes — таблица маршрутов
     • Shares — NAS/DNS + автоподключение NAS
-    • Update — проверка версии с GitHub Releases
+    • Update — автопроверка при запуске и каждый час; кнопка вручную
 
     Первый запуск
     • System Helper → Установить (если пункта нет в меню)

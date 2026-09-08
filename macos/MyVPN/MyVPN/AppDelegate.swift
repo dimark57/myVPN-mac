@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let configDir = NSHomeDirectory() + "/.config/myvpn"
     private let menuWidth: CGFloat = 320
     private var connectionSettingsWC: ConnectionSettingsWindowController?
+    private var updateTimer: Timer?
+    private var updateInFlight = false
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -76,10 +78,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Start immediately so an early menu open already shows «включаю…».
         beginAutoUpIfNeeded()
+
+        // App updates: on launch (after VPN settle) + every hour; auto-install if newer.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
+            self?.runAutoUpdate(reason: "launch")
+        }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            self?.runAutoUpdate(reason: "hourly")
+        }
+        if let updateTimer {
+            RunLoop.main.add(updateTimer, forMode: .common)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        updateTimer?.invalidate()
         stopPidDirWatcher()
         stopMouseExitMonitor()
     }
@@ -470,6 +484,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func openHelp() {
         HelpWindowController.show(using: &connectionSettingsWC)
+    }
+
+    /// Silent check + auto-install from GitHub Releases (launch + hourly).
+    private func runAutoUpdate(reason: String) {
+        guard !updateInFlight else { return }
+        updateInFlight = true
+        log("auto-update: check (\(reason))")
+        Task { [weak self] in
+            let result = await UpdateChecker.check()
+            await MainActor.run {
+                guard let self else { return }
+                if result.upToDate {
+                    self.log("auto-update: up to date — \(result.message)")
+                    self.updateInFlight = false
+                    return
+                }
+                guard let url = result.assetURL else {
+                    self.log("auto-update: newer but no asset — \(result.message)")
+                    self.notify(
+                        title: "myVPN · Обновление",
+                        body: "\(result.message). Открой Настройки → Update.",
+                        replacing: "auto-update"
+                    )
+                    self.updateInFlight = false
+                    return
+                }
+                let ver = result.latest ?? "?"
+                self.notify(
+                    title: "myVPN · Обновляю",
+                    body: "Ставлю v\(ver) · \(DoctorStatus.nowStamp())",
+                    replacing: "auto-update"
+                )
+                self.log("auto-update: installing v\(ver)")
+                Task {
+                    do {
+                        try await UpdateChecker.install(from: url)
+                    } catch {
+                        await MainActor.run {
+                            self.updateInFlight = false
+                            self.log("auto-update: failed \(error.localizedDescription)")
+                            self.notify(
+                                title: "myVPN ✕ Обновление",
+                                body: error.localizedDescription,
+                                replacing: "auto-update"
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func beginAutoUpIfNeeded() {

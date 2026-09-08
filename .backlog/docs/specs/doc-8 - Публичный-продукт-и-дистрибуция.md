@@ -18,7 +18,7 @@ updated_date: '2026-09-08 12:30'
 | Топология | `settings.json`: `channels[]` + `routes[]` (+ NAS/DNS scalars) | Чужие сети без хардкода; миграция с macbook/home.conf |
 | Маршруты | Только `routes[]`; AllowedIPs в `.conf` **не** источник route | Как Clash/sing-box |
 | UI конфигов | Окно: System Helper / Channels / Routes / Shares / Update (+ Справка из меню) | Без submenu в menu bar; автоподключения в блоках Channels/Shares |
-| Обновление app | GitHub Releases `myVPN.app.zip` + Настройки → Update (не silent auto) | Деплой = новый Release; пользователь жмёт кнопку |
+| Обновление app | GitHub Releases + автопроверка (launch + каждый час, auto-install) + Настройки → Update | Деплой = новый Release |
 | Раздача | Только Releases; `install-app.zsh` — только явная отладка / внутри `release.zsh` | README не учит собирать из исходников |
 | Доставка на Mac владельца | Не «закатывать фикс» через install; после `release.zsh` local==Release, дальше только кнопка | Иначе откаты |
 | Списки RU | Отдельный пункт меню | Не путать с обновлением приложения |
