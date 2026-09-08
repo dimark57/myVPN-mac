@@ -64,6 +64,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "WARN · endpoint→utun"
         case "TUN_DOWN":
             return "FAIL · VPN off"
+        case "UNDERLAY_DOWN":
+            return "FAIL · нет сети (Wi‑Fi)"
         case "MACBOOK_EGRESS_DOWN":
             return "FAIL · нет интернета"
         case "HOME_PEER_DOWN":
@@ -107,6 +109,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "Работает, есть риск отвала"
         case "TUN_DOWN":
             return "VPN выключен"
+        case "UNDERLAY_DOWN":
+            return "Нет локальной сети / Wi‑Fi"
         case "MACBOOK_EGRESS_DOWN":
             return "Нет интернета через VPN"
         case "HOME_PEER_DOWN", "HOME_DOWN_MACBOOK_OK":
@@ -135,6 +139,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "Сейчас всё доступно, но маршрут к серверам VPN идёт через туннель. После сна или смены сети соединение может отвалиться. \(t)"
         case "TUN_DOWN":
             return "Sing-box не запущен. Нажми «Включить». \(t)"
+        case "UNDERLAY_DOWN":
+            return "Wi‑Fi/Ethernet или default route недоступны (Errno 49). Почини сеть — VPN restart не поможет. \(t)"
         case "MACBOOK_EGRESS_DOWN":
             return "Туннель есть, но интернет через macbook не проходит. Попробуй Выключить → Включить. \(t)"
         case "HOME_DOWN_MACBOOK_OK":

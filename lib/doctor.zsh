@@ -201,13 +201,36 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     (( tun )) && _doc_evidence "no public IP while tun=1"
   fi
 
+  # Underlay / local IF: Errno 49 + no default route ≠ dead VPS (doc-9 UNDERLAY_DOWN).
+  # Uses: udp_*_err, r_def (filled below — provisional from errs first).
+  local underlay_dead=0 underlay_reason=""
+  _doc_is_underlay_err() {
+    case "$1" in
+      *"Can't assign requested address"*|*"Network is unreachable"*|*"No route to host"*|*"errno 49"*|*"Errno 49"*) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
   if [[ -n "${udp_mb_ok:-}" ]]; then
-    _doc_check "udp_macbook_51820" "$([[ "$udp_mb_ok" == "1" ]] && echo 1 || echo 0)" \
-      "send ${mb_host}:${mb_port} ok=${udp_mb_ok} ms=${udp_mb_ms:-?} ${udp_mb_err:-}"
+    if [[ "$udp_mb_ok" == "1" ]]; then
+      _doc_check "udp_macbook_51820" "1" "send ${mb_host}:${mb_port} ok=1 ms=${udp_mb_ms:-?}"
+    elif _doc_is_underlay_err "${udp_mb_err:-}"; then
+      _doc_check "udp_macbook_51820" "2" "send ${mb_host}:${mb_port} underlay ${udp_mb_err}"
+      underlay_dead=1
+      underlay_reason="udp macbook: ${udp_mb_err}"
+    else
+      _doc_check "udp_macbook_51820" "0" "send ${mb_host}:${mb_port} ok=0 ms=${udp_mb_ms:-?} ${udp_mb_err:-}"
+    fi
   fi
   if [[ -n "${udp_hm_ok:-}" ]]; then
-    _doc_check "udp_home_51820" "$([[ "$udp_hm_ok" == "1" ]] && echo 1 || echo 0)" \
-      "send ${hm_host}:${hm_port} ok=${udp_hm_ok} ms=${udp_hm_ms:-?} ${udp_hm_err:-}"
+    if [[ "$udp_hm_ok" == "1" ]]; then
+      _doc_check "udp_home_51820" "1" "send ${hm_host}:${hm_port} ok=1 ms=${udp_hm_ms:-?}"
+    elif _doc_is_underlay_err "${udp_hm_err:-}"; then
+      _doc_check "udp_home_51820" "2" "send ${hm_host}:${hm_port} underlay ${udp_hm_err}"
+      underlay_dead=1
+      [[ -z "$underlay_reason" ]] && underlay_reason="udp home: ${udp_hm_err}"
+    else
+      _doc_check "udp_home_51820" "0" "send ${hm_host}:${hm_port} ok=0 ms=${udp_hm_ms:-?} ${udp_hm_err:-}"
+    fi
   fi
 
   # WG.app conflict
@@ -267,7 +290,14 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   _doc_check "route_mb_ep" "3" "${mb_host:-?} → if=${r_mb:-?} (должен быть физ. NIC / direct)"
   _doc_check "route_hm_ep" "3" "${hm_host:-?} → if=${r_hm:-?} (должен быть физ. NIC / direct)"
   _doc_check "route_nas" "3" "${MYVPN_NAS_HOST} → if=${r_nas:-?}"
-  _doc_check "route_default" "3" "default → if=${r_def:-?}"
+  if [[ -z "${r_def}" ]]; then
+    _doc_check "route_default" "0" "default → if=? (нет default route — underlay)"
+    underlay_dead=1
+    underlay_reason="${underlay_reason:-no default route}"
+    _doc_evidence "no default route (local IF/WAN)"
+  else
+    _doc_check "route_default" "3" "default → if=${r_def}"
+  fi
   # OS route via utun for WG endpoints can flap handshake after sleep (sing-box direct may still work).
   if [[ "$r_mb" == utun* ]]; then
     _doc_check "route_mb_via_tun" "2" "${mb_host} via ${r_mb} — риск hairpin/handshake flap"
@@ -299,9 +329,18 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   dns_ocode="$("${DIG}" +short +time=2 +tries=1 ocode.digials.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
   # Non-RU resolve via TUN hijack → should use dns-remote (macbook→1.1.1.1)
   dns_remote="$("${DIG}" +short +time=2 +tries=1 cloudflare.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
+  # digials A-samples: soft WARN — hard signal is home gw / hub (avoids HEALTHY fail=1 noise).
   if (( home )); then
-    _doc_check "dns_backlog" "$([[ "$dns_backlog" == "10.57.0.100" ]] && echo 1 || echo 0)" "got ${dns_backlog:-empty}"
-    _doc_check "dns_ocode" "$([[ "$dns_ocode" == "10.57.0.100" ]] && echo 1 || echo 0)" "got ${dns_ocode:-empty}"
+    if [[ "$dns_backlog" == "10.57.0.100" ]]; then
+      _doc_check "dns_backlog" "1" "got ${dns_backlog}"
+    else
+      _doc_check "dns_backlog" "2" "got ${dns_backlog:-empty} (soft — смотри hub/home)"
+    fi
+    if [[ "$dns_ocode" == "10.57.0.100" ]]; then
+      _doc_check "dns_ocode" "1" "got ${dns_ocode}"
+    else
+      _doc_check "dns_ocode" "2" "got ${dns_ocode:-empty} (soft — смотри hub/home)"
+    fi
   else
     _doc_check "dns_hub" "2" "home down — digials skip (backlog=${dns_backlog:-empty})"
   fi
@@ -403,7 +442,8 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   fi
 
   # --- INTERPRETATION ---
-  # Priority: conflict > tun down > egress down > home down > dns > nas > icmp-only false alarm
+  # Priority: conflict > tun > underlay > egress > home > dns > nas > icmp false alarm
+  # Underlay before MACBOOK_EGRESS — Errno 49 / no default ≠ dead peer (Cloudflare WAN / cr0x hysteresis).
   if (( wg_app && tun )); then
     primary="CONFLICT_WG_APP"
     confidence="high"
@@ -415,10 +455,17 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     VERDICT_LINES+=("sing-box не запущен (tun=0). Split-tunnel целиком выключен.")
     _doc_action "myvpn up  (или On в меню)"
     _doc_evidence "tun=0"
+  elif (( tun == 1 && underlay_dead && egress_via_macbook == 0 && ${#pub} == 0 )); then
+    primary="UNDERLAY_DOWN"
+    confidence="high"
+    VERDICT_LINES+=("Локальная сеть/WAN (underlay) сломана: ${underlay_reason:-no IF/default}.")
+    VERDICT_LINES+=("TUN жив, но OS не может слать UDP на endpoint — это не мёртвый VPS.")
+    _doc_action "почини Wi‑Fi/Ethernet/default route; не крути VPN restart впустую"
+    _doc_evidence "underlay: ${underlay_reason:-unknown}"
   elif (( tun == 1 && egress_via_macbook == 0 && ${#pub} == 0 )); then
     primary="MACBOOK_EGRESS_DOWN"
     confidence="high"
-    VERDICT_LINES+=("TUN жив, но публичный IP пуст — default path (final=macbook) не даёт egress.")
+    VERDICT_LINES+=("TUN жив, underlay ок, но публичный IP пуст — overlay/handshake macbook.")
     VERDICT_LINES+=("Скорее мёртв handshake/endpoint macbook (${mb_host:-?}:51820), не home.")
     _doc_action "проверь доступность ${mb_host}:51820/UDP с другой сети; myvpn down && myvpn up"
     (( mb_ep_icmp == 0 )) && _doc_action "VPS ${mb_host} не пингуется — endpoint/WAN/firewall"
@@ -539,19 +586,25 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     overall="WARN"
   fi
   # PRIMARY is the human severity. Heal maps PRIMARY, not OVERALL.
-  # FAIL = tun/egress/home/conflict. WARN = SMB/DNS/endpoint-via-tun (накапливаем в журнал).
+  # FAIL = tun/underlay/egress/home/conflict. WARN = SMB/DNS/endpoint-via-tun.
   case "$primary" in
     HEALTHY|HEALTHY_ICMP_FALSE_ALARM) overall="PASS" ;;
     HEALTHY_BUT_ENDPOINT_VIA_TUN|NAS_STALE|NAS_MOUNT_ONLY|DNS_STALE|EGRESS_NOT_VIA_MACBOOK) overall="WARN" ;;
+    UNDERLAY_DOWN|TUN_DOWN|MACBOOK_EGRESS_DOWN|HOME_PEER_DOWN|HOME_DOWN_MACBOOK_OK|CONFLICT_WG_APP) overall="FAIL" ;;
   esac
+  # PASS + residual soft fails → don't show fail=N (dns sample noise).
+  local fail_show="${FAIL_COUNT}" warn_show="${WARN_COUNT}"
+  if [[ "$overall" == "PASS" ]]; then
+    fail_show=0
+  fi
 
   {
     print -r -- ""
     print -r -- "=== VERDICT ==="
     print -r -- "PRIMARY: ${primary}"
     print -r -- "CONFIDENCE: ${confidence}"
-    print -r -- "OVERALL: ${overall}  (fail=${FAIL_COUNT} warn=${WARN_COUNT})"
-    print -r -- "snapshot: tun=${tun} home=${home} nas=${nas_fast} egress_macbook=${egress_via_macbook} icmp_mb_gw=${macbook_icmp} ip=${pub}"
+    print -r -- "OVERALL: ${overall}  (fail=${fail_show} warn=${warn_show})"
+    print -r -- "snapshot: tun=${tun} home=${home} nas=${nas_fast} egress_macbook=${egress_via_macbook} icmp_mb_gw=${macbook_icmp} underlay=${underlay_dead} ip=${pub}"
     print -r -- ""
     print -r -- "Interpretation:"
     local line
@@ -583,22 +636,35 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     print -r -- ""
     print -r -- "Как читать:"
     print -r -- "  HEALTHY* — сейчас каналы живы; смотри WARN про endpoint→utun."
+    print -r -- "  UNDERLAY_DOWN — Wi‑Fi/default/Errno 49; не restart VPN."
     print -r -- "  HOME_PEER_DOWN / HOME_DOWN_MACBOOK_OK — «отвал NAS/Hub» (FAIL)."
-    print -r -- "  MACBOOK_EGRESS_DOWN — «отвал интернета» при живом меню (FAIL)."
+    print -r -- "  MACBOOK_EGRESS_DOWN — overlay/egress при живом underlay (FAIL)."
     print -r -- "  NAS_STALE / NAS_MOUNT_ONLY / DNS_STALE — WARN, heal по PRIMARY."
     print -r -- "  CONFLICT_WG_APP — не мешай WG.app и myVPN."
-    print -r -- "  DIFF / drops.log — флапы и AUTO_*; отчёты не чистить."
+    print -r -- "  DIFF / drops.log — флапы (сжатые) и AUTO_*; отчёты не чистить."
     print -r -- ""
     print -r -- "Full: ${report_file}"
     print -r -- "Latest: ${latest}"
     print -r -- "State: ${state_file}"
   } | /usr/bin/tee -a "${report_file}" | /usr/bin/tee "${latest}"
 
-  # Journal every run (CLI + app). Heal still keys on PRIMARY; AUTO_* пишет Swift.
-  # Uses: report_dir/drops.log — не ротировать, анализ частоты кодов позже.
-  {
-    print -r -- "[$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)] DOCTOR primary=${primary} overall=${overall} fail=${FAIL_COUNT} warn=${WARN_COUNT}"
-  } >> "${report_dir}/drops.log" 2>/dev/null || true
+  # Journal: skip duplicate consecutive HEALTHY DOCTOR; trim to 800 lines.
+  local drops_log="${report_dir}/drops.log" stamp skip_journal=0 last_doc
+  stamp="$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)"
+  if [[ "$primary" == HEALTHY* && -f "${drops_log}" ]]; then
+    last_doc="$(/usr/bin/tail -n 40 "${drops_log}" 2>/dev/null | /usr/bin/grep ' DOCTOR primary=' | /usr/bin/tail -1 || true)"
+    if [[ "$last_doc" == *"primary=${primary}"* && "$last_doc" == *"overall=${overall}"* ]]; then
+      skip_journal=1
+    fi
+  fi
+  if (( skip_journal == 0 )); then
+    print -r -- "[${stamp}] DOCTOR primary=${primary} overall=${overall} fail=${fail_show} warn=${warn_show}" \
+      >> "${drops_log}" 2>/dev/null || true
+  fi
+  if [[ -f "${drops_log}" ]]; then
+    /usr/bin/tail -n 800 "${drops_log}" > "${drops_log}.tmp" 2>/dev/null \
+      && /bin/mv -f "${drops_log}.tmp" "${drops_log}" 2>/dev/null || true
+  fi
 
   # No osascript banners — app UNUserNotification / CLI stdout only.
 

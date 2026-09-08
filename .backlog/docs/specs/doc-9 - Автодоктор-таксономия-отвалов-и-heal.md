@@ -23,8 +23,8 @@ created_date: '2026-09-08 08:25'
 Правила автомата (как у нормальных failover):
 
 1. Разделять **underlay / overlay / app**.
-2. Heal только после **N подряд** провалов (не один miss).
-3. **Cooldown / rate-limit failback** — иначе flap хуже отвала.
+2. Heal только после **N подряд** провалов (не один miss) — DropLogger `CONFIRM` 2/2.
+3. **Cooldown / rate-limit** + **follow-up exempt** для mount после restart.
 4. Сначала **снимок (doctor report)** в журнал, потом действие.
 5. Не auto-heal при конфликте WG.app и при underlay down.
 
@@ -35,56 +35,56 @@ created_date: '2026-09-08 08:25'
 | Код (PRIMARY) | Симптом у человека | Детект (авто) | Журнал | Auto-heal (если галочка) | Не делать |
 |---------------|-------------------|---------------|--------|--------------------------|-----------|
 | `TUN_DOWN` | VPN «выкл», иконка off | pid/sing-box.pid=0, нет utun 172.19 | doctor + drops | `myvpn up` | — |
-| `MACBOOK_EGRESS_DOWN` | Нет интернета, NAS может жить | tun=1, pub IP empty, final=macbook | doctor + drops | `down`→`up` (1×) | если underlay endpoint ICMP=0 — сначала ждать WAN |
+| `MACBOOK_EGRESS_DOWN` | Нет интернета при живом Wi‑Fi | tun=1, pub empty, underlay OK | doctor + drops | `down`→`up` + mount | underlay dead → см. UNDERLAY |
 | `HOME_PEER_DOWN` / `HOME_DOWN_MACBOOK_OK` | Нет NAS/Hub, интернет ок или тоже мёртв | ping home gw fail | doctor + drops | `down`→`up`; затем `mount-nas --force` | — |
 | `NAS_MOUNT_ONLY` | Home ок, шара не смонтирована | host ping ok, volume missing | doctor **WARN** | `mount-nas --force` | full VPN restart |
 | `NAS_STALE` | SMB half-open после flap | listdir fail / stale | doctor **WARN** | `mount-nas --force` | — |
 | `DNS_STALE` | digials/RU «не те» | Wi‑Fi DNS ≠ 172.19.0.1 | doctor **WARN** | `flush-dns` | down/up первым |
 | `CONFLICT_WG_APP` | Рандомные отвалы/маршруты | WG.app Connected + tun | doctor | **нет** — notify «выключи WG.app» | auto down/up |
+| `UNDERLAY_DOWN` | Нет Wi‑Fi / «сеть пропала» | default route missing **или** UDP Errno 49 / unreachable на endpoint | doctor + drops | **нет** — ждать path up | VPN restart |
 | `HEALTHY_BUT_ENDPOINT_VIA_TUN` | Пока ок; риск после sleep | route endpoint → utun* | doctor WARN | нет (профилактика); при следующем drop — heal по PRIMARY | ложный restart |
 | `HEALTHY_ICMP_FALSE_ALARM` | Кажется «peer down» | ping 10.8.0.1=0, но egress IP=endpoint | doctor PASS | **нет** | heal по ICMP |
 | `EGRESS_NOT_VIA_MACBOOK` | IP «не тот» | pub ≠ macbook ep | doctor **WARN** | повторный doctor; heal только если remote DNS/egress реально мёртв | слепой restart |
 | `MIXED` | Непонятно | низкая confidence | doctor | нет — только notify + отчёт | — |
-| *(новый, MVP2)* `UNDERLAY_DOWN` | Нет сети вообще | en0 down / endpoint ICMP=0 и нет default | drops | нет (ждать path up) | VPN restart |
-| *(новый, MVP2)* `SLEEP_WAKE_STALE` | После крышки «туннель есть — интернета нет» | wake event + egress fail в окне T | doctor | `down`→`up` | — |
+| *(новый)* `SLEEP_WAKE_STALE` | После крышки «туннель есть — интернета нет» | wake event + egress fail в окне T | doctor | `down`→`up` | — |
 | *(вне MVP)* `APP_CRASH` | Меню пропало | LaunchAgent / ExcUserFault | system log | relaunch app | путать с каналом |
 
-Уже есть PRIMARY в `lib/doctor.zsh` — auto-doctor **мапит** на них; новые коды — только если текущих не хватает (UNDERLAY / SLEEP_WAKE).
+`UNDERLAY_DOWN` выше `MACBOOK_EGRESS_DOWN`: Errno 49 / `route_default if=?` — локальный стек, не мёртвый VPS.
+
+Паттерны (Cloudflare WAN + MikroTik hysteresis + k8s failureThreshold):
+
+1. Разделять **underlay / overlay / app**.
+2. Heal только после **N=2 подряд** подтверждений drop (DropLogger `CONFIRM`).
+3. **Cooldown** ≥5 мин; **follow-up** mount/flush в окне 120с после restart — **без** cooldown (анти-каскад).
+4. Сначала снимок doctor, потом действие.
+5. Не auto-heal при `CONFLICT_WG_APP` и `UNDERLAY_DOWN`.
+6. Журнал `drops.log`: FLAP-coalesce (45с), trim 800 строк, skip дубль HEALTHY DOCTOR.
 
 ## 3. Как детектить автоматически (pipeline)
 
 ```
-status poll (уже есть) / path change / wake
+status poll
         │
         ▼
-DropLogger 1→0  или  tun=1 && egress empty (N подряд)
+DropLogger DIFF / FLAP (coalesce 45s)
         │
-        ▼  [галочка Автодиагностика]
-myvpn doctor  →  ~/.cache/myvpn-doctor/report-*.txt + latest.txt
-        │
-        ▼  PRIMARY + confidence
-decision table (§2)
-        │
-        ▼  [галочка Автовосстановление + cooldown]
-heal action  →  drops.log: AUTO_HEAL primary=… ok=0|1
+        ▼  N=2 CONFIRM (hysteresis)
+notify + [галочка Автодиагностика]
         │
         ▼
-notify + обновить DoctorStatus в меню
+myvpn doctor  →  report + latest + DOCTOR line
+        │
+        ▼  PRIMARY
+decision table (§2 / §5)
+        │
+        ▼  [Автовосстановление + cooldown | follow-up 120s]
+heal  →  AUTO_HEAL ok=0|1
+        │
+        ▼
+notify + DoctorStatus в меню
 ```
 
-**Probes (data-plane, не только «туннель up»):**
-
-| Probe | Цель |
-|-------|------|
-| tun / pid | control: процесс жив |
-| ping channel gw (10.8.0.1 / 10.13.13.1) | overlay peer |
-| pub IP (ifconfig.me) vs final endpoint | egress через macbook |
-| ICMP/UDP endpoint на en0 | underlay до VPS/home |
-| DNS = TUN | hijack |
-| NAS listdir | SMB data-plane |
-| sing-box.log signals (handshake/failed/timeout) | усилитель confidence |
-
-Индустрия: DPD ≠ полезность канала — нужен **overlay probe**. У нас уже так в doctor.
+**Probes:** tun/pid · ping gw · pub IP · UDP/ICMP endpoint (underlay) · DNS=TUN · NAS listdir · sing-box.log signals.
 
 ## 4. Журналы ошибок (куда писать / что читать)
 
@@ -110,17 +110,18 @@ notify + обновить DoctorStatus в меню
 | PRIMARY | Команда | Условие |
 |---------|---------|---------|
 | `TUN_DOWN` | `myvpn up` | helper ok |
-| `MACBOOK_EGRESS_DOWN` | `myvpn down && myvpn up` | underlay endpoint ICMP=1 (или skip wait ≤30s) |
+| `UNDERLAY_DOWN` | — | ждать Wi‑Fi/WAN |
+| `MACBOOK_EGRESS_DOWN` | `down && up` → `mount-nas --force` | underlay OK |
 | `HOME_*` | `down && up` → `mount-nas --force` | — |
-| `NAS_*` | `mount-nas --force` | home=1 |
-| `DNS_STALE` | `flush-dns` | tun=1 |
+| `NAS_*` | `mount-nas --force` | home=1; follow-up без cooldown ≤120с после restart |
+| `DNS_STALE` | `flush-dns` | tun=1; follow-up без cooldown ≤120с |
 | `CONFLICT_WG_APP` | — | только notify |
 | `HEALTHY*` | — | — |
 | else / low confidence | — | только doctor+notify |
 
-**Cooldown:** ≥5 мин между AUTO_HEAL; max 3 heal / час → потом «нужен человек» + отчёт.
+**Cooldown:** ≥5 мин между AUTO_HEAL (кроме follow-up mount/flush); max 3 restart-heal / час.
 
-**OVERALL ≠ heal.** Меню «Значительные» только при FAIL (tun / egress / home / conflict). `NAS_*` / `DNS_STALE` / `EGRESS_NOT_VIA_MACBOOK` = **WARN** («Незначительные»), но PRIMARY не меняется — auto-heal по §5 всё равно идёт. Каждый `myvpn doctor` дописывает `DOCTOR primary=… overall=…` в `drops.log`; `report-*.txt` не чистить — по частоте кодов потом крутить таймауты и «N подряд».
+**OVERALL ≠ heal.** Меню «Значительные» только при FAIL (tun / underlay / egress / home / conflict). `NAS_*` / `DNS_STALE` / `EGRESS_NOT_VIA_MACBOOK` = **WARN**. PASS не показывает residual `fail=N` (soft digials samples = WARN).
 
 ## 6. UI: Настройки → Диагностика (контракт для реализации)
 

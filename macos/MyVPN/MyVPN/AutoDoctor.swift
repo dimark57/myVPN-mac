@@ -1,10 +1,12 @@
 import Foundation
 
 /// Auto doctor/heal prefs + decision table (doc-9). Uses: DoctorStatus, DropLogger, MyVPNCLI.
+/// Patterns: Cloudflare WAN hysteresis, k8s failureThreshold, follow-up heal (no cascade cooldown).
 enum AutoDoctor {
     private static let doctorKey = "local.myvpn.mac.autoDoctor"
     private static let healKey = "local.myvpn.mac.autoHeal"
     private static let lastHealKey = "local.myvpn.mac.autoHeal.last"
+    private static let lastHealKindKey = "local.myvpn.mac.autoHeal.lastKind"
     private static let healTimesKey = "local.myvpn.mac.autoHeal.times"
 
     /// Default ON (nil → true).
@@ -27,7 +29,11 @@ enum AutoDoctor {
     }
 
     static let cooldownSeconds: TimeInterval = 300
+    /// After down→up, allow mount/flush without waiting full cooldown (cascade fix).
+    static let followUpWindowSeconds: TimeInterval = 120
     static let maxHealsPerHour = 3
+    /// Cloudflare-style: N consecutive bad samples before auto-doctor (DropLogger).
+    static let dropConfirmNeeded = 2
 
     enum HealKind: Equatable {
         case up
@@ -41,7 +47,8 @@ enum AutoDoctor {
     /// Compact catalog for Settings → Диагностика (doc-9 §2).
     static let catalog: [(code: String, symptom: String, action: String)] = [
         ("TUN_DOWN", "VPN выкл", "myvpn up"),
-        ("MACBOOK_EGRESS_DOWN", "Нет интернета, NAS может жить", "down→up"),
+        ("UNDERLAY_DOWN", "Wi‑Fi/default/Errno 49", "ждать сеть · не restart"),
+        ("MACBOOK_EGRESS_DOWN", "Нет интернета, underlay ок", "down→up + mount"),
         ("HOME_PEER_DOWN", "Нет home / NAS / Hub", "down→up + mount-nas"),
         ("HOME_DOWN_MACBOOK_OK", "Интернет ок, home мёртв", "down→up + mount-nas"),
         ("NAS_MOUNT_ONLY", "Том NAS не смонтирован", "mount-nas --force"),
@@ -59,8 +66,11 @@ enum AutoDoctor {
         switch primary {
         case "TUN_DOWN":
             return .up
+        case "UNDERLAY_DOWN":
+            return .none(reason: "underlay — ждать Wi‑Fi/WAN")
         case "MACBOOK_EGRESS_DOWN":
-            return .restart
+            // Opportunistic mount after restart — avoids NAS_MOUNT_ONLY + cooldown trap.
+            return .restartAndMount
         case "HOME_PEER_DOWN", "HOME_DOWN_MACBOOK_OK":
             return .restartAndMount
         case "NAS_STALE", "NAS_MOUNT_ONLY":
@@ -81,32 +91,48 @@ enum AutoDoctor {
         }
     }
 
-    /// Underlay dead → skip restart (doc-9: don't spin VPN).
-    static func shouldSkipRestartForUnderlay(_ doc: DoctorStatus) -> Bool {
-        // state.json doesn't store mb_ep; infer from MACBOOK + empty pub already failed.
-        // Skip only when doctor text/latest mentions endpoint ICMP fail — soft check via primary only.
-        _ = doc
-        return false
-    }
-
-    static func canHealNow() -> (ok: Bool, reason: String?) {
+    /// Soft follow-up after a restart heal (mount/flush) — skip cooldown, still rate-limit.
+    static func isFollowUpHeal(primary: String, kind: HealKind) -> Bool {
+        switch kind {
+        case .mountNAS, .flushDNS:
+            break
+        default:
+            return false
+        }
+        guard ["NAS_STALE", "NAS_MOUNT_ONLY", "DNS_STALE"].contains(primary) else { return false }
         let now = Date().timeIntervalSince1970
         let last = UserDefaults.standard.double(forKey: lastHealKey)
-        if last > 0, now - last < cooldownSeconds {
-            let left = Int(cooldownSeconds - (now - last))
-            return (false, "cooldown \(left)с")
+        guard last > 0, now - last < followUpWindowSeconds else { return false }
+        let lastKind = UserDefaults.standard.string(forKey: lastHealKindKey) ?? ""
+        return lastKind == "down→up" || lastKind == "down→up+mount" || lastKind == "up"
+    }
+
+    static func canHealNow(primary: String = "", kind: HealKind = .none(reason: "")) -> (ok: Bool, reason: String?) {
+        let now = Date().timeIntervalSince1970
+        let followUp = isFollowUpHeal(primary: primary, kind: kind)
+        if !followUp {
+            let last = UserDefaults.standard.double(forKey: lastHealKey)
+            if last > 0, now - last < cooldownSeconds {
+                let left = Int(cooldownSeconds - (now - last))
+                return (false, "cooldown \(left)с")
+            }
         }
         var times = (UserDefaults.standard.array(forKey: healTimesKey) as? [Double]) ?? []
         times = times.filter { now - $0 < 3600 }
-        if times.count >= maxHealsPerHour {
+        // Follow-up mount doesn't burn the hourly budget (cascade after restart).
+        if !followUp, times.count >= maxHealsPerHour {
             return (false, "лимит \(maxHealsPerHour)/час")
         }
         return (true, nil)
     }
 
-    static func recordHeal() {
+    static func recordHeal(kind: HealKind, primary: String = "") {
+        // Snapshot follow-up BEFORE bumping lastHeal timestamps.
+        let skipHourly = isFollowUpHeal(primary: primary.isEmpty ? "NAS_MOUNT_ONLY" : primary, kind: kind)
         let now = Date().timeIntervalSince1970
         UserDefaults.standard.set(now, forKey: lastHealKey)
+        UserDefaults.standard.set(kindLabel(kind), forKey: lastHealKindKey)
+        if skipHourly { return }
         var times = (UserDefaults.standard.array(forKey: healTimesKey) as? [Double]) ?? []
         times = times.filter { now - $0 < 3600 }
         times.append(now)
@@ -126,6 +152,8 @@ enum AutoDoctor {
             try? MyVPNCLI.down()
             Thread.sleep(forTimeInterval: 1.0)
             try MyVPNCLI.up()
+            // Brief settle so SMB path exists before force-mount.
+            Thread.sleep(forTimeInterval: 1.5)
             try? MyVPNCLI.mountNAS(force: true)
         case .mountNAS:
             try MyVPNCLI.mountNAS(force: true)

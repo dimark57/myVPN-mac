@@ -1139,7 +1139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
 
-                let gate = AutoDoctor.canHealNow()
+                let gate = AutoDoctor.canHealNow(primary: doc.primary, kind: kind)
                 guard gate.ok else {
                     DropLogger.logEvent("AUTO_HEAL skip=\(gate.reason ?? "gate") primary=\(doc.primary)")
                     DispatchQueue.main.async {
@@ -1153,20 +1153,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
 
+                let followUp = AutoDoctor.isFollowUpHeal(primary: doc.primary, kind: kind)
                 DispatchQueue.main.async {
                     self?.busyKey = "auto-heal"
                     if self?.menuIsOpen == true { self?.rebuildMenu() }
                     self?.notify(
                         title: "myVPN · Автовосстановление",
-                        body: "\(AutoDoctor.kindLabel(kind)) · \(DoctorStatus.nowStamp())",
+                        body: "\(AutoDoctor.kindLabel(kind))\(followUp ? " · follow-up" : "") · \(DoctorStatus.nowStamp())",
                         replacing: "auto-heal"
                     )
                 }
 
                 do {
                     try AutoDoctor.performHeal(kind)
-                    AutoDoctor.recordHeal()
-                    DropLogger.logEvent("AUTO_HEAL ok=1 action=\(AutoDoctor.kindLabel(kind)) primary=\(doc.primary)")
+                    AutoDoctor.recordHeal(kind: kind, primary: doc.primary)
+                    DropLogger.logEvent(
+                        "AUTO_HEAL ok=1 action=\(AutoDoctor.kindLabel(kind)) primary=\(doc.primary)\(followUp ? " follow-up=1" : "")"
+                    )
                     DispatchQueue.main.async {
                         self?.notify(
                             title: "myVPN ✓ Восстановлено",

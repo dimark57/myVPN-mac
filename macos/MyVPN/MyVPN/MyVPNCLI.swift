@@ -103,7 +103,8 @@ enum MyVPNCLI {
     /// Non-mutating interpretive report. Exit ≠ 0 is OK for WARN/FAIL if latest.txt written.
     @discardableResult
     static func doctor() throws -> String {
-        let result = try run(["doctor"], timeout: 60, quiet: true)
+        // Full doctor often 45–70s (pings + hub); 60s caused AUTO_DOCTOR timeout noise.
+        let result = try run(["doctor"], timeout: 120, quiet: true)
         let combined = result.stdout + result.stderr
         let latest = DoctorStatus.latestURL.path
         if FileManager.default.fileExists(atPath: latest) {
