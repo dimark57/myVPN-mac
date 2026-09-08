@@ -49,7 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         menu.minimumWidth = menuWidth
-        statusItem.menu = menu
+        // Manual popUp: hang menu left of the icon so banners to the right stay visible.
+        if let button = statusItem.button {
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseDown])
+        }
 
         applyIcon()
         rules = RulesStatus.load()
@@ -81,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menuIsOpen = true
+        statusItem.button?.highlight(true)
         if !isBusy {
             rules = RulesStatus.load()
             doctor = DoctorStatus.load()
@@ -94,7 +100,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuDidClose(_ menu: NSMenu) {
         menuIsOpen = false
+        statusItem.button?.highlight(false)
         stopMouseExitMonitor()
+    }
+
+    /// Pop menu with right edge under the status button (body to the left).
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        if menuIsOpen {
+            menu.cancelTracking()
+            return
+        }
+        // Top-left of menu at (button.right − width, button.bottom) → hangs left, below icon.
+        let origin = NSPoint(x: sender.bounds.width - menuWidth, y: 0)
+        menu.popUp(positioning: nil, at: origin, in: sender)
     }
 
     // MARK: - Keep open on click / close on mouse leave
@@ -125,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let buttonScreen = bw.convertToScreen(button.convert(button.bounds, to: nil))
             safe = safe.union(buttonScreen.insetBy(dx: -4, dy: -4))
         }
-        // Grace so cursor can move between status item and menu / submenu.
+        // Grace so cursor can move between status item and menu.
         safe = safe.insetBy(dx: -6, dy: -6)
         if safe.isNull || !safe.contains(mouse) {
             menu.cancelTracking()
