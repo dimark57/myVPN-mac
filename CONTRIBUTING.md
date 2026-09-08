@@ -20,10 +20,10 @@
 macos/MyVPN/release.zsh 0.3.1
 ```
 
-Скрипт: сборка → zip → `gh release create` с asset `myVPN.app.zip`.  
+Скрипт: `build-app.zsh` (stage) → zip → `gh release create` с asset `myVPN.app.zip`.  
 На Mac пользователя (и на «проде» владельца): автопроверка при запуске + каждый час, либо **Настройки → Update**.
 
-**Не делать:** `install-app.zsh` / ручной `cp` в `~/Applications` как способ «закатить фикс». Это обход релиза и рассинхрон с GitHub. `install-app.zsh` — только локальная проверка сборки, если явно попросили «собери локально».
+**Не делать:** копировать app в `~/Applications` из stage/DerivedData. `install-app.zsh` отключён (exit 1). Единственный install path — GitHub Releases.
 
 ## CLI (local runtime)
 

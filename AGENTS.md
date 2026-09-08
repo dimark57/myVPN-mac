@@ -27,11 +27,11 @@ GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
 
 ## Runtime
 
-- **Раздача пользователям:** только GitHub Releases (`myVPN.app.zip`). Не `install-app.zsh` как install path.
-- **Обновление у пользователя (включая этот Mac как «прод»):** после нового GitHub Release — автопроверка при запуске и каждый час (auto-install) или Настройки → Update вручную.
-- **Запрещено агенту/деплою:** копировать бинарь в `~/Applications` через `install-app.zsh` / `ditto` / `open` ради «подтянуть фикс». Локальный `install-app.zsh` — только явная отладка сборки по запросу «собери локально», не способ доставки.
-- **Публикация релиза:** `macos/MyVPN/release.zsh [version]` → пользователь жмёт обновление.
-- App: `~/Applications/myVPN.app`, runtime в `Contents/Resources/runtime`
+- **Раздача / установка:** только GitHub Releases (`myVPN.app.zip`). `install-app.zsh` **отключён** (exit 1 → ссылка на Releases).
+- **Обновление у пользователя (включая этот Mac как «прод»):** после `release.zsh` — автопроверка при запуске и каждый час (auto-install) или Настройки → Update. **Не** копировать из stage/DerivedData в `~/Applications`.
+- **Запрещено агенту/деплою:** `ditto` / `cp` / `open` бинаря в `~/Applications` в обход Releases.
+- **Публикация релиза:** `macos/MyVPN/release.zsh [version]` → `build-app.zsh` (stage) → zip → `gh release create`. Stage не ставится локально.
+- App у пользователя: `~/Applications/myVPN.app` (из zip или Update), runtime в `Contents/Resources/runtime`
 - CLI symlink: `~/.local/bin/myvpn` → `~/.local/share/myvpn`
 - Helper: LaunchDaemon `local.myvpn.mac.helper`
 - Home CIDR из AllowedIPs conf; LAN/DNS/NAS из settings.json

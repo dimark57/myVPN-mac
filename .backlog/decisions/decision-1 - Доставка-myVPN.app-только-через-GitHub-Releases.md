@@ -10,7 +10,8 @@ status: accepted
 
 ## Decision
 
-Прод-доставка только release.zsh → GitHub Releases → кнопка Проверить обновление (Настройки → Update). install-app.zsh не способ доставки на Mac владельца; допустим только внутри release.zsh или по явной просьбе «собери локально».
+Прод-доставка только `release.zsh` → `build-app.zsh` (stage) → GitHub Releases → Update / zip.  
+`install-app.zsh` **отключён** (exit 1). Копирование в `~/Applications` из stage/DerivedData запрещено.
 
 ## Consequences
 

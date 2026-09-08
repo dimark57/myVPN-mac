@@ -1,21 +1,26 @@
 import AppKit
 
-/// Unified preferences: System Helper / Channels / Routes / Shares / Update / Help.
+/// Unified preferences: System Helper / Channels / Routes / Domain zones / Shares / Diagnostics / Update / Help.
 /// Model: named channels (WG conf) + manual routes (Clash-style), not AllowedIPs.
 final class ConnectionSettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     enum Section: Int, CaseIterable {
-        case systemHelper, channels, routes, shares, update, help
+        case systemHelper, channels, routes, domainZones, shares, diagnostics, update, help
         var title: String {
             switch self {
             case .systemHelper: return "System Helper"
             case .channels: return "Channels"
             case .routes: return "Routes"
+            case .domainZones: return "Доменные зоны"
             case .shares: return "Shares"
+            case .diagnostics: return "Диагностика"
             case .update: return "Update"
             case .help: return "Справка"
             }
         }
     }
+
+    /// Menu-bar actions (doctor / RU / report) live on AppDelegate.
+    weak var appDelegate: AppDelegate?
 
     private var settings = AppSettings.load()
     private var section: Section = .channels
@@ -51,6 +56,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var dnsSuffixField: NSTextField!
     private var dnsViaPopup: NSPopUpButton!
     private var autoNasCheck: NSButton!
+
+    // Domain zones / Diagnostics
+    private var zonesStatusLabel: NSTextField!
+    private var zonesActionButton: NSButton!
+    private var diagStatusLabel: NSTextField!
+    private var diagRunButton: NSButton!
+    private var diagOpenButton: NSButton!
+    private var diagSendButton: NSButton!
 
     // System Helper / Update
     private var helperStatusLabel: NSTextField!
@@ -117,7 +130,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         let title = NSTextField(labelWithString: "Настройки")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         let sub = NSTextField(wrappingLabelWithString:
-            "System Helper · Channels · Routes · Shares · Update. Канал = WireGuard (.conf). Маршруты вручную: условие → канал или direct.")
+            "Каналы, маршруты, доменные зоны (RU), диагностика, обновление. Канал = WireGuard (.conf).")
         sub.font = .systemFont(ofSize: 12)
         sub.textColor = .secondaryLabelColor
         sub.preferredMaxLayoutWidth = 740
@@ -277,7 +290,9 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         case .systemHelper: pane = makeSystemHelperPane()
         case .channels: pane = makeChannelsPane()
         case .routes: pane = makeRoutesPane()
+        case .domainZones: pane = makeDomainZonesPane()
         case .shares: pane = makeSharesPane()
+        case .diagnostics: pane = makeDiagnosticsPane()
         case .update: pane = makeUpdatePane()
         case .help: pane = makeHelpPane()
         }
@@ -287,7 +302,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         switch section {
         case .channels, .routes, .help:
             host = pane
-        case .systemHelper, .shares, .update:
+        case .systemHelper, .domainZones, .shares, .diagnostics, .update:
             let shell = NSStackView()
             shell.orientation = .vertical
             shell.alignment = .width
@@ -562,7 +577,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         root.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         let intro = NSTextField(wrappingLabelWithString:
-            "Порядок сверху вниз. via = id канала или direct. Rule-set: geosite-ru / geoip-ru после «Обновить RU».")
+            "Порядок сверху вниз. via = id канала или direct. Rule-set: geosite-ru / geoip-ru после «Доменные зоны → Обновить RU».")
         intro.font = .systemFont(ofSize: 11)
         intro.textColor = .secondaryLabelColor
         intro.preferredMaxLayoutWidth = 580
@@ -840,6 +855,164 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         }
     }
 
+    // MARK: - Domain zones / Diagnostics
+
+    private func makeDomainZonesPane() -> NSView {
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 14
+        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        root.alignment = .leading
+
+        root.addArrangedSubview(sectionTitle("Доменные зоны (RU)"))
+        let intro = NSTextField(wrappingLabelWithString:
+            "Rule-set geosite-ru / geoip-ru для маршрутов. Обновление скачивает свежие списки в ~/.config/myvpn/rules.")
+        intro.font = .systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(intro)
+
+        let rules = appDelegate?.settingsRulesStatus() ?? RulesStatus.load()
+        zonesStatusLabel = NSTextField(labelWithString: "\(rules.geositeLine)  ·  \(rules.geoipLine)")
+        zonesStatusLabel.font = .systemFont(ofSize: 13)
+        zonesStatusLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(zonesStatusLabel)
+
+        zonesActionButton = NSButton(title: "Обновить RU", target: self, action: #selector(updateDomainZones))
+        zonesActionButton.bezelStyle = .rounded
+        root.addArrangedSubview(zonesActionButton)
+        return root
+    }
+
+    @objc private func updateDomainZones() {
+        guard !prefsBusy else { return }
+        prefsBusy = true
+        zonesActionButton?.isEnabled = false
+        zonesStatusLabel?.stringValue = "Обновляю…"
+        setStatus("Обновляю списки RU…", ok: true)
+        workQueue.async { [weak self] in
+            do {
+                try MyVPNCLI.updateRules()
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.prefsBusy = false
+                    self.zonesActionButton?.isEnabled = true
+                    self.appDelegate?.settingsReloadRules()
+                    let rules = self.appDelegate?.settingsRulesStatus() ?? RulesStatus.load()
+                    self.zonesStatusLabel?.stringValue = "\(rules.geositeLine)  ·  \(rules.geoipLine)"
+                    self.setStatus("Списки RU обновлены · \(rules.notifyStamp)", ok: true)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.zonesActionButton?.isEnabled = true
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
+    }
+
+    private func makeDiagnosticsPane() -> NSView {
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 14
+        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        root.alignment = .leading
+
+        root.addArrangedSubview(sectionTitle("Диагностика"))
+        let intro = NSTextField(wrappingLabelWithString:
+            "Снимок каналов и вердикт. Отчёт: ~/.cache/myvpn-doctor/latest.txt. Отправка разработчику — через GitHub Issues (отчёт копируется в буфер).")
+        intro.font = .systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(intro)
+
+        let doc = appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
+        diagStatusLabel = NSTextField(wrappingLabelWithString: diagStatusText(doc))
+        diagStatusLabel.font = .systemFont(ofSize: 13)
+        diagStatusLabel.preferredMaxLayoutWidth = 520
+        root.addArrangedSubview(diagStatusLabel)
+
+        let btns = NSStackView()
+        btns.orientation = .horizontal
+        btns.spacing = 10
+        diagRunButton = NSButton(title: "Провести диагностику", target: self, action: #selector(runDiagnosticsFromSettings))
+        diagRunButton.bezelStyle = .rounded
+        diagOpenButton = NSButton(title: "Открыть диагностический отчёт", target: self, action: #selector(openDiagnosticsReport))
+        diagOpenButton.bezelStyle = .rounded
+        diagSendButton = NSButton(title: "Отправить отчёт разработчику", target: self, action: #selector(sendDiagnosticsReport))
+        diagSendButton.bezelStyle = .rounded
+        btns.addArrangedSubview(diagRunButton)
+        btns.addArrangedSubview(diagOpenButton)
+        btns.addArrangedSubview(diagSendButton)
+        root.addArrangedSubview(btns)
+        refreshDiagnosticsButtons()
+        return root
+    }
+
+    private func diagStatusText(_ doc: DoctorStatus) -> String {
+        if !doc.hasResult {
+            return "Последний результат: нет данных — нажми «Провести диагностику»."
+        }
+        return "Последний результат: \(doc.severityLabel)\n\(doc.userHeadline) · \(doc.displayStamp)"
+    }
+
+    private func refreshDiagnosticsButtons() {
+        let exists = FileManager.default.fileExists(atPath: DoctorStatus.latestURL.path)
+        diagOpenButton?.isEnabled = exists && !prefsBusy
+        diagSendButton?.isEnabled = exists && !prefsBusy
+        diagRunButton?.isEnabled = !prefsBusy
+    }
+
+    @objc private func runDiagnosticsFromSettings() {
+        guard !prefsBusy else { return }
+        prefsBusy = true
+        refreshDiagnosticsButtons()
+        setStatus("Диагностика…", ok: true)
+        workQueue.async { [weak self] in
+            do {
+                _ = try MyVPNCLI.doctor()
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.prefsBusy = false
+                    self.appDelegate?.settingsReloadDoctor()
+                    let doc = self.appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
+                    self.diagStatusLabel?.stringValue = self.diagStatusText(doc)
+                    self.refreshDiagnosticsButtons()
+                    self.setStatus(doc.severityLabel, ok: doc.overall != "FAIL")
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.prefsBusy = false
+                    self?.refreshDiagnosticsButtons()
+                    self?.setStatus(error.localizedDescription, ok: false)
+                }
+            }
+        }
+    }
+
+    @objc private func openDiagnosticsReport() {
+        if let appDelegate {
+            appDelegate.settingsOpenDoctorReport()
+            return
+        }
+        let url = DoctorStatus.latestURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            setStatus("Отчёта ещё нет", ok: false)
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func sendDiagnosticsReport() {
+        if let appDelegate {
+            appDelegate.settingsSendDoctorReport()
+            setStatus("Отчёт в буфере · GitHub Issues", ok: true)
+            return
+        }
+        setStatus("Нет связи с menu bar", ok: false)
+    }
+
     private func makeSharesPane() -> NSView {
         let root = NSStackView()
         root.orientation = .vertical
@@ -1096,13 +1269,24 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     • System Helper — установка/удаление privileged helper
     • Channels — conf + автоподнятие после перезагрузки
     • Routes — таблица маршрутов
+    • Доменные зоны — Обновить RU (geosite/geoip)
     • Shares — NAS/DNS + автоподключение NAS
+    • Диагностика — отчёт + отправка разработчику (GitHub Issues)
     • Update — автопроверка при запуске и каждый час; кнопка вручную
+
+    Menu bar
+    • Вкл/Выкл, NAS, Провести диагностику, Проверка обновления, Настройки…
+    • Горячие клавиши (глобальные ⌃⌥⌘): V = VPN, N = NAS, D = диагностика, , = настройки
+
+    Установка приложения
+    • Только из GitHub Releases (myVPN.app.zip) или Настройки → Update
+    • Сборка из исходников в ~/Applications не поддерживается
 
     Первый запуск
     • System Helper → Установить (если пункта нет в меню)
     • Channels → импорт/вставка conf, имя, кто default
     • Routes → LAN direct, домашние сети → home, RU packs
+    • Доменные зоны → Обновить RU
     • Сохранить → Включить
     """
 

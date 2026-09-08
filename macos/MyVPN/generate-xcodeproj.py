@@ -37,6 +37,7 @@ I = {
     "ref_conn": "A10000000000000000000066",
     "ref_help": "A10000000000000000000067",
     "ref_update": "A10000000000000000000068",
+    "ref_hotkeys": "A10000000000000000000069",
     "bf_app": "A10000000000000000000024",
     "bf_cli": "A10000000000000000000025",
     "bf_status": "A10000000000000000000026",
@@ -54,6 +55,7 @@ I = {
     "bf_conn": "A10000000000000000000057",
     "bf_help": "A10000000000000000000058",
     "bf_update": "A10000000000000000000059",
+    "bf_hotkeys": "A1000000000000000000005A",
     "build_proj_debug": "A10000000000000000000030",
     "build_proj_release": "A10000000000000000000031",
     "build_tgt_debug": "A10000000000000000000032",
@@ -87,6 +89,7 @@ pbx = f"""// !$*UTF8*$!
 		{I['bf_conn']} /* ConnectionSettingsWindowController.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_conn']} /* ConnectionSettingsWindowController.swift */; }};
 		{I['bf_help']} /* HelpWindowController.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_help']} /* HelpWindowController.swift */; }};
 		{I['bf_update']} /* UpdateChecker.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_update']} /* UpdateChecker.swift */; }};
+		{I['bf_hotkeys']} /* GlobalHotkeys.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_hotkeys']} /* GlobalHotkeys.swift */; }};
 		{I['bf_assets']} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {I['ref_assets']} /* Assets.xcassets */; }};
 /* End PBXBuildFile section */
 
@@ -108,6 +111,7 @@ pbx = f"""// !$*UTF8*$!
 		{I['ref_conn']} /* ConnectionSettingsWindowController.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSettingsWindowController.swift; sourceTree = "<group>"; }};
 		{I['ref_help']} /* HelpWindowController.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindowController.swift; sourceTree = "<group>"; }};
 		{I['ref_update']} /* UpdateChecker.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; }};
+		{I['ref_hotkeys']} /* GlobalHotkeys.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeys.swift; sourceTree = "<group>"; }};
 		{I['ref_info']} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; }};
 		{I['ref_assets']} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
@@ -149,6 +153,7 @@ pbx = f"""// !$*UTF8*$!
 				{I['ref_conn']} /* ConnectionSettingsWindowController.swift */,
 				{I['ref_help']} /* HelpWindowController.swift */,
 				{I['ref_update']} /* UpdateChecker.swift */,
+				{I['ref_hotkeys']} /* GlobalHotkeys.swift */,
 				{I['ref_sticky']} /* StickyMenuItemView.swift */,
 				{I['ref_assets']} /* Assets.xcassets */,
 				{I['ref_info']} /* Info.plist */,
@@ -244,6 +249,7 @@ pbx = f"""// !$*UTF8*$!
 				{I['bf_conn']} /* ConnectionSettingsWindowController.swift in Sources */,
 				{I['bf_help']} /* HelpWindowController.swift in Sources */,
 				{I['bf_update']} /* UpdateChecker.swift in Sources */,
+				{I['bf_hotkeys']} /* GlobalHotkeys.swift in Sources */,
 				{I['bf_sticky']} /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

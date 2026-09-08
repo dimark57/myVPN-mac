@@ -1,5 +1,6 @@
 #!/bin/zsh
 # Build myVPN.app.zip and publish GitHub Release (dimark57/myVPN-mac).
+# Does NOT install to ~/Applications — users update via Releases / in-app Update.
 # Usage: macos/MyVPN/release.zsh [version]
 # Example: macos/MyVPN/release.zsh 0.3.0
 set -euo pipefail
@@ -19,13 +20,13 @@ if [[ -n "${1:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $((BUILD + 1))" "${PLIST}" || true
 fi
 
-print -r -- "Building myVPN ${VERSION}…"
-"${APP_DIR}/install-app.zsh"
-
-DEST="${HOME}/Applications/myVPN.app"
 STAGE="${TMPDIR:-/tmp}/myvpn-release-$$"
 mkdir -p "${STAGE}"
-/bin/cp -R "${DEST}" "${STAGE}/myVPN.app"
+trap '/bin/rm -rf "${STAGE}"' EXIT
+
+print -r -- "Building myVPN ${VERSION} → stage (no ~/Applications install)…"
+"${APP_DIR}/build-app.zsh" "${STAGE}"
+
 ZIP="${STAGE}/myVPN.app.zip"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "${STAGE}/myVPN.app" "${ZIP}"
 
@@ -34,8 +35,8 @@ print -r -- "Publishing ${TAG} → GitHub…"
 gh release create "${TAG}" "${ZIP}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
-  --notes "Menu-bar split-tunnel client. Download myVPN.app.zip → ~/Applications → open. First launch: install helper, import WireGuard profiles." \
+  --notes "Menu-bar split-tunnel client. Download myVPN.app.zip → ~/Applications → open. First launch: install helper, import WireGuard profiles. Update: Settings → Update (or auto)." \
   --latest
 
 print -r -- "OK ${TAG} asset myVPN.app.zip"
-/bin/rm -rf "${STAGE}"
+print -r -- "На этом Mac: Настройки → Update (или дождись автообновления). Не копируй из stage."

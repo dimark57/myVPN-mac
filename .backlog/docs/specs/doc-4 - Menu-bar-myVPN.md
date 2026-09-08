@@ -3,7 +3,7 @@ id: doc-4
 title: Menu bar myVPN
 type: specification
 created_date: '2026-09-07 13:10'
-updated_date: '2026-09-08 12:30'
+updated_date: '2026-09-08 13:20'
 ---
 # Menu bar myVPN
 
@@ -21,24 +21,48 @@ updated_date: '2026-09-08 12:30'
 
 ## Поставка
 
-- Сборка: `macos/MyVPN/` → `~/Applications/myVPN.app`
+- Пользователь: **только** GitHub Releases (`myVPN.app.zip`) или in-app Update → `~/Applications/myVPN.app`
+- Сборка релиза: `release.zsh` → `build-app.zsh` (stage) → zip → `gh release create` (не ставит локально)
 - Runtime внутри: `Contents/Resources/runtime/{bin,lib,share}`
 - Helper: LaunchDaemon `local.myvpn.mac.helper` + socket `/var/run/myvpn-helper.sock`
 - Автозапуск UI: **SMAppService** login item приложения; legacy LaunchAgent `local.myvpn.mac.login` (zsh) **не** используется как основной путь
 
 ## Меню (минимум)
 
-- Status (tun / пиры / NAS / IP) — info
-- Включить / Выключить (disabled, пока helper не установлен)
-- Смонтировать NAS
-- Обновить списки RU (+ info geosite-ru / geoip-ru — **doc-7**)
-- Настройки… → окно: System Helper / Channels / Routes / Shares / Update (+ Справка)
-  - System Helper: install/uninstall
-  - Channels: conf + автоподнятие после reboot
-  - Shares: NAS/DNS + авто-NAS
-  - Update: проверка GitHub Releases
-- Справка… — отдельный пункт меню (та же секция окна)
-- Выход
+```
+[status badge]
+────────
+Включить / Выключить
+────────
+Смонтировать NAS / Перемонтировать NAS
+────────
+Провести диагностику
+Проверка обновления
+────────
+Настройки…          ⌃⌥⌘,
+Горячие клавиши ▸
+────────
+Выход
+```
+
+### Глобальные горячие клавиши (Carbon, без Accessibility)
+
+Модификатор **⌃⌥⌘** — меньше конфликтов, чем ClashX-style ⌘⇧*.
+
+| Комбо | Действие |
+|-------|----------|
+| ⌃⌥⌘V | Вкл / Выкл VPN |
+| ⌃⌥⌘N | Смонтировать NAS |
+| ⌃⌥⌘D | Диагностика |
+| ⌃⌥⌘, | Настройки |
+
+- Helper install — только если helper отсутствует/сломан
+- Настройки… → окно (shell фиксирован: sidebar + content frame одной высоты):
+  - System Helper / Channels / Routes / **Доменные зоны** / Shares / **Диагностика** / Update / Справка
+  - Доменные зоны: Обновить RU (geosite/geoip)
+  - Диагностика: отчёт + отправить разработчику (GitHub Issues, отчёт в буфер)
+- Справка — только внутри Настроек (не отдельный пункт menu bar)
+- Установка app — только GitHub Releases (не локальный `install-app.zsh`)
 
 Пока долгая операция: disabled **только** текущий пункт; меню не глушить целиком. Sticky click (меню не закрывать по клику пункта) — решение CEO; закрытие — mouse leave.
 

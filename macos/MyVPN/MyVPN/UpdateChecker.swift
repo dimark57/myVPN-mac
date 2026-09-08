@@ -43,6 +43,18 @@ enum UpdateChecker {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }
 
+    /// Menu detail: `v0.3.1` or `v0.3.1 (доступна v0.4.0)`.
+    static func menuDetail(latest: String?, upToDate: Bool) -> String {
+        let cur = "v\(currentVersion)"
+        guard let latest, !latest.isEmpty, !upToDate else { return cur }
+        return "\(cur) (доступна v\(latest))"
+    }
+
+    static func menuDetail(from result: Result?) -> String {
+        guard let result else { return "v\(currentVersion)" }
+        return menuDetail(latest: result.latest, upToDate: result.upToDate)
+    }
+
     static func check() async -> Result {
         let current = currentVersion
         let api = URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!

@@ -16,10 +16,11 @@
 zsh ~/.local/share/myvpn/patches/autoload-nas-ux/patch.zsh
 ```
 
-Канон после remount: исходники уже в `macos/MyVPN/MyVPN/` — обычный:
+Канон после remount: исходники уже в `macos/MyVPN/MyVPN/` — доставка только через GitHub:
 
 ```bash
-macos/MyVPN/install-app.zsh
+macos/MyVPN/release.zsh [version]
+# затем Настройки → Update (не install-app.zsh — отключён)
 ```
 
 ## Файлы

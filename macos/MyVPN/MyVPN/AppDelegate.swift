@@ -20,10 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let workQueue = DispatchQueue(label: "local.myvpn.mac.cli", qos: .userInitiated)
     private let logURL = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Logs/myvpn-menubar.log")
     private let configDir = NSHomeDirectory() + "/.config/myvpn"
-    private let menuWidth: CGFloat = 320
+    private let menuWidth: CGFloat = 360
     private var connectionSettingsWC: ConnectionSettingsWindowController?
     private var updateTimer: Timer?
     private var updateInFlight = false
+    /// Last known GitHub release check for menu detail.
+    private var lastUpdateCheck: UpdateChecker.Result?
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -64,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         rebuildMenu()
         refreshStatus()
         refreshPrefs()
+        startGlobalHotkeys()
 
         // Fallback only — primary updates: menu open + pid-file watcher (Alfred gv / CLI).
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
@@ -94,21 +97,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
         updateTimer?.invalidate()
+        GlobalHotkeys.shared.stop()
         stopPidDirWatcher()
         stopMouseExitMonitor()
+    }
+
+    // MARK: - Global hotkeys (Carbon — no Accessibility)
+
+    private func startGlobalHotkeys() {
+        let hk = GlobalHotkeys.shared
+        hk.onAction = { [weak self] action in
+            self?.handleHotkey(action)
+        }
+        hk.start()
+        log("global hotkeys: registered \(GlobalHotkeys.bindings.count)")
+    }
+
+    private func handleHotkey(_ action: HotkeyAction) {
+        switch action {
+        case .toggleVPN:
+            guard helperOn, !isBusy else {
+                if !helperOn {
+                    notify(title: "myVPN", body: "Сначала установи помощника · \(DoctorStatus.nowStamp())", replacing: "hotkey")
+                }
+                return
+            }
+            if snapshot.isOn { turnOff() } else { turnOn() }
+        case .mountNAS:
+            guard !isBusy else { return }
+            mountNAS()
+        case .doctor:
+            guard !isBusy else { return }
+            runDoctor()
+        case .settings:
+            openConnectionSettings()
+        }
     }
 
     func menuWillOpen(_ menu: NSMenu) {
         menuIsOpen = true
         statusItem.button?.highlight(true)
+        // Do NOT rebuildMenu here: with manual popUp, removeAllItems during open
+        // leaves NSMenu scrolled (top ^ caret + first rows clipped).
         if !isBusy {
-            rules = RulesStatus.load()
-            doctor = DoctorStatus.load()
-            // Force fresh status (e.g. after Alfred gv) — do not wait for timer.
+            // Async refresh; rebuild only if snapshot actually changes.
             refreshStatus(includePublicIP: true)
-            refreshPrefs()
         }
-        rebuildMenu()
         startMouseExitMonitor()
     }
 
@@ -124,9 +158,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.cancelTracking()
             return
         }
-        // Top-left of menu at (button.right − width, button.bottom) → hangs left, below icon.
+        // Rebuild BEFORE popUp (not in menuWillOpen) so the first row stays pinned.
+        if !isBusy {
+            rules = RulesStatus.load()
+            doctor = DoctorStatus.load()
+            refreshPrefs()
+        }
+        rebuildMenu()
+        // Pin first custom row under the button — nil positioning + all-custom-views
+        // often shows a scroll-up caret and hides «Выключить».
+        let pin = menu.items.first { $0.view != nil }
         let origin = NSPoint(x: sender.bounds.width - menuWidth, y: 0)
-        menu.popUp(positioning: nil, at: origin, in: sender)
+        menu.popUp(positioning: pin, at: origin, in: sender)
     }
 
     // MARK: - Keep open on click / close on mouse leave
@@ -186,12 +229,199 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return "\(base) — выполняется"
     }
 
-    private func addStickyAction(
+    private enum MenuSlot {
+        case sticky(
+            key: String,
+            title: String,
+            enabled: Bool,
+            detail: String?,
+            checked: Bool?,
+            action: () -> Void
+        )
+        case hotkeysSubmenu
+        case separator
+    }
+
+    private func menuSlots() -> [MenuSlot] {
+        var slots: [MenuSlot] = []
+
+        // Status badge (info)
+        slots.append(.sticky(
+            key: "status",
+            title: statusHeaderTitle,
+            enabled: false,
+            detail: nil,
+            checked: nil,
+            action: {}
+        ))
+        slots.append(.separator)
+
+        // VPN — global ⌃⌥⌘V
+        let vpnDetail: String = {
+            switch busyKey {
+            case "up", "auto-up": return "…"
+            case "down": return "…"
+            default: return snapshot.menuBadge
+            }
+        }()
+        if busyKey == "up" || busyKey == "auto-up" {
+            slots.append(.sticky(key: busyKey!, title: "Включаю VPN…", enabled: false, detail: vpnDetail, checked: nil, action: {}))
+        } else if busyKey == "down" {
+            slots.append(.sticky(key: "down", title: "Выключаю VPN…", enabled: false, detail: vpnDetail, checked: nil, action: {}))
+        } else if snapshot.isOn {
+            slots.append(.sticky(
+                key: "down",
+                title: "Выключить",
+                enabled: actionEnabled("down", helperOn),
+                detail: vpnDetail,
+                checked: nil,
+                action: { [weak self] in self?.turnOff() }
+            ))
+        } else {
+            slots.append(.sticky(
+                key: "up",
+                title: "Включить",
+                enabled: actionEnabled("up", helperOn),
+                detail: vpnDetail,
+                checked: nil,
+                action: { [weak self] in self?.turnOn() }
+            ))
+        }
+
+        // Helper only when missing / broken
+        if !helperOn {
+            let title = MyVPNHelper.filesPresent
+                ? "Переустановить помощника"
+                : "Установить помощника"
+            slots.append(.sticky(
+                key: "helper-install",
+                title: title,
+                enabled: actionEnabled("helper-install"),
+                detail: MyVPNHelper.filesPresent ? "нет socket" : nil,
+                checked: nil,
+                action: { [weak self] in self?.installHelper() }
+            ))
+        }
+
+        slots.append(.separator)
+
+        // NAS — global ⌃⌥⌘N
+        let nasDetail: String = {
+            switch busyKey {
+            case "mount-nas", "auto-nas": return "…"
+            case "up", "auto-up": return autoNASOn ? "ожидание…" : snapshot.nasBadge
+            default: return snapshot.nasBadge
+            }
+        }()
+        if busyKey == "mount-nas" || busyKey == "auto-nas" {
+            slots.append(.sticky(key: busyKey!, title: "Монтирую NAS…", enabled: false, detail: nasDetail, checked: nil, action: {}))
+        } else {
+            slots.append(.sticky(
+                key: "mount-nas",
+                title: snapshot.nas ? "Перемонтировать NAS" : "Смонтировать NAS",
+                enabled: actionEnabled("mount-nas"),
+                detail: nasDetail,
+                checked: nil,
+                action: { [weak self] in self?.mountNAS() }
+            ))
+        }
+
+        slots.append(.separator)
+
+        // Doctor — global ⌃⌥⌘D
+        let doctorDetail = busyKey == "doctor" ? "…" : doctor.menuSeverityDetail
+        slots.append(.sticky(
+            key: "doctor",
+            title: "Провести диагностику",
+            enabled: actionEnabled("doctor"),
+            detail: doctorDetail,
+            checked: nil,
+            action: { [weak self] in self?.runDoctor() }
+        ))
+
+        // Update check
+        let updateDetail = busyKey == "check-update" ? "…" : UpdateChecker.menuDetail(from: lastUpdateCheck)
+        slots.append(.sticky(
+            key: "check-update",
+            title: "Проверка обновления",
+            enabled: actionEnabled("check-update", !updateInFlight),
+            detail: updateDetail,
+            checked: nil,
+            action: { [weak self] in self?.checkUpdateFromMenu() }
+        ))
+
+        slots.append(.separator)
+
+        slots.append(.sticky(
+            key: "settings",
+            title: "Настройки…",
+            enabled: true,
+            detail: "⌃⌥⌘,",
+            checked: nil,
+            action: { [weak self] in
+                self?.menu.cancelTracking()
+                self?.openConnectionSettings()
+            }
+        ))
+        slots.append(.hotkeysSubmenu)
+
+        slots.append(.separator)
+
+        slots.append(.sticky(
+            key: "quit",
+            title: "Выход",
+            enabled: true,
+            detail: nil,
+            checked: nil,
+            action: { [weak self] in
+                self?.menu.cancelTracking()
+                NSApp.terminate(nil)
+            }
+        ))
+
+        return slots
+    }
+
+    private func makeHotkeysSubmenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Горячие клавиши", action: nil, keyEquivalent: "")
+        let sub = NSMenu(title: "Горячие клавиши")
+        for binding in GlobalHotkeys.bindings {
+            let row = NSMenuItem(
+                title: binding.title,
+                action: #selector(hotkeyMenuAction(_:)),
+                keyEquivalent: binding.keyEquivalent
+            )
+            row.keyEquivalentModifierMask = binding.nsModifiers
+            row.target = self
+            row.representedObject = binding.action.rawValue
+            row.isEnabled = true
+            sub.addItem(row)
+        }
+        sub.addItem(.separator())
+        let note = NSMenuItem(
+            title: "Глобальные · ⌃⌥⌘",
+            action: nil,
+            keyEquivalent: ""
+        )
+        note.isEnabled = false
+        sub.addItem(note)
+        item.submenu = sub
+        return item
+    }
+
+    @objc private func hotkeyMenuAction(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? UInt32,
+              let action = HotkeyAction(rawValue: raw) else { return }
+        menu.cancelTracking()
+        handleHotkey(action)
+    }
+
+    private func addStickyItem(
         key: String,
         title: String,
         enabled: Bool,
-        detail: String? = nil,
-        checked: Bool? = nil,
+        detail: String?,
+        checked: Bool?,
         action: @escaping () -> Void
     ) {
         let item = NSMenuItem()
@@ -207,7 +437,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         view.onClick = { [weak self] in
             guard let self, enabled else { return }
             action()
-            // Refresh labels in-place while menu stays open.
             if self.menuIsOpen {
                 self.rebuildMenu()
             }
@@ -216,127 +445,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item)
     }
 
+    /// Same slot layout as current items? Then patch StickyMenuItemView in place
+    /// (removeAllItems while open → scroll caret ^ + clipped top rows).
+    private func syncOpenMenu(with slots: [MenuSlot]) -> Bool {
+        guard menu.items.count == slots.count else { return false }
+        for (item, slot) in zip(menu.items, slots) {
+            switch slot {
+            case .separator:
+                guard item.isSeparatorItem else { return false }
+            case .hotkeysSubmenu:
+                guard item.submenu != nil, item.view == nil, !item.isSeparatorItem else { return false }
+            case let .sticky(key, title, enabled, detail, checked, action):
+                guard let view = item.view as? StickyMenuItemView else { return false }
+                view.setTitle(actionTitle(key, title))
+                view.setDetail(detail)
+                if let checked { view.setChecked(checked) }
+                view.isActionEnabled = enabled
+                view.onClick = { [weak self] in
+                    guard let self, enabled else { return }
+                    action()
+                    if self.menuIsOpen {
+                        self.rebuildMenu()
+                    }
+                }
+            }
+        }
+        return true
+    }
+
     private func rebuildMenu() {
+        let slots = menuSlots()
+        if menuIsOpen, syncOpenMenu(with: slots) {
+            return
+        }
+
         menu.removeAllItems()
-
-        // VPN — status on the right of the action
-        let vpnDetail: String = {
-            switch busyKey {
-            case "up", "auto-up": return "…"
-            case "down": return "…"
-            default: return snapshot.menuBadge
+        for slot in slots {
+            switch slot {
+            case .separator:
+                menu.addItem(.separator())
+            case .hotkeysSubmenu:
+                menu.addItem(makeHotkeysSubmenuItem())
+            case let .sticky(key, title, enabled, detail, checked, action):
+                addStickyItem(
+                    key: key,
+                    title: title,
+                    enabled: enabled,
+                    detail: detail,
+                    checked: checked,
+                    action: action
+                )
             }
-        }()
-        if busyKey == "up" || busyKey == "auto-up" {
-            addStickyAction(key: busyKey!, title: "Включаю VPN…", enabled: false, detail: vpnDetail) { }
-        } else if busyKey == "down" {
-            addStickyAction(key: "down", title: "Выключаю VPN…", enabled: false, detail: vpnDetail) { }
-        } else if snapshot.isOn {
-            addStickyAction(
-                key: "down",
-                title: "Выключить",
-                enabled: actionEnabled("down", helperOn),
-                detail: vpnDetail
-            ) { [weak self] in
-                self?.turnOff()
-            }
-        } else {
-            addStickyAction(
-                key: "up",
-                title: "Включить",
-                enabled: actionEnabled("up", helperOn),
-                detail: vpnDetail
-            ) { [weak self] in
-                self?.turnOn()
-            }
-        }
-
-        // Helper only when missing / broken (hide when OK)
-        if !helperOn {
-            let title = MyVPNHelper.filesPresent
-                ? "Переустановить помощника"
-                : "Установить помощника"
-            addStickyAction(
-                key: "helper-install",
-                title: title,
-                enabled: actionEnabled("helper-install"),
-                detail: MyVPNHelper.filesPresent ? "нет socket" : nil
-            ) { [weak self] in
-                self?.installHelper()
-            }
-        }
-
-        menu.addItem(.separator())
-
-        // NAS
-        let nasDetail: String = {
-            switch busyKey {
-            case "mount-nas", "auto-nas": return "…"
-            case "up", "auto-up": return autoNASOn ? "ожидание…" : snapshot.nasBadge
-            default: return snapshot.nasBadge
-            }
-        }()
-        if busyKey == "mount-nas" || busyKey == "auto-nas" {
-            addStickyAction(key: busyKey!, title: "Монтирую NAS…", enabled: false, detail: nasDetail) { }
-        } else {
-            addStickyAction(
-                key: "mount-nas",
-                title: snapshot.nas ? "Перемонтировать NAS" : "Смонтировать NAS",
-                enabled: actionEnabled("mount-nas"),
-                detail: nasDetail
-            ) { [weak self] in
-                self?.mountNAS()
-            }
-        }
-
-        // RU lists
-        addStickyAction(
-            key: "update-rules",
-            title: "Обновить RU",
-            enabled: actionEnabled("update-rules"),
-            detail: busyKey == "update-rules" ? "…" : rules.menuBadge
-        ) { [weak self] in
-            self?.updateRules()
-        }
-
-        menu.addItem(.separator())
-
-        // Doctor
-        let doctorDetail = busyKey == "doctor" ? "…" : doctor.rowDetail
-        addStickyAction(
-            key: "doctor",
-            title: "Диагностика",
-            enabled: actionEnabled("doctor"),
-            detail: doctorDetail
-        ) { [weak self] in
-            self?.runDoctor()
-        }
-        let reportExists = FileManager.default.fileExists(atPath: DoctorStatus.latestURL.path)
-        addStickyAction(
-            key: "open-report",
-            title: "Открыть диагностический отчёт",
-            enabled: reportExists && busyKey != "doctor"
-        ) { [weak self] in
-            self?.openDoctorReport()
-        }
-
-        menu.addItem(.separator())
-
-        addStickyAction(key: "settings", title: "Настройки…", enabled: true) { [weak self] in
-            self?.menu.cancelTracking()
-            self?.openConnectionSettings()
-        }
-
-        addStickyAction(key: "help", title: "Справка…", enabled: true) { [weak self] in
-            self?.menu.cancelTracking()
-            self?.openHelp()
-        }
-
-        menu.addItem(.separator())
-
-        addStickyAction(key: "quit", title: "Выход", enabled: true) { [weak self] in
-            self?.menu.cancelTracking()
-            NSApp.terminate(nil)
         }
     }
 
@@ -446,7 +605,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard FileManager.default.fileExists(atPath: url.path) else {
             notify(
                 title: "myVPN",
-                body: "Отчёта ещё нет — сначала «Диагностика» · \(DoctorStatus.nowStamp())",
+                body: "Отчёта ещё нет — сначала «Провести диагностику» · \(DoctorStatus.nowStamp())",
                 replacing: "open-report"
             )
             return
@@ -454,8 +613,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    /// Copy latest doctor report + open GitHub Issues (Настройки → Диагностика).
+    private func sendDoctorReportToDeveloper() {
+        let url = DoctorStatus.latestURL
+        guard let text = try? String(contentsOf: url, encoding: .utf8), !text.isEmpty else {
+            notify(
+                title: "myVPN",
+                body: "Отчёта ещё нет — сначала «Провести диагностику» · \(DoctorStatus.nowStamp())",
+                replacing: "send-report"
+            )
+            return
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+
+        var comps = URLComponents(string: "https://github.com/dimark57/myVPN-mac/issues/new")!
+        comps.queryItems = [
+            URLQueryItem(name: "title", value: "Диагностика myVPN v\(UpdateChecker.currentVersion)"),
+            URLQueryItem(
+                name: "body",
+                value: """
+                <!-- Отчёт уже в буфере обмена — вставь ниже между ``` -->
+
+                **Версия:** v\(UpdateChecker.currentVersion)
+                **PRIMARY:** \(doctor.primary.isEmpty ? "—" : doctor.primary)
+                **OVERALL:** \(doctor.overall.isEmpty ? "—" : doctor.overall)
+
+                ```
+                (вставь ~/.cache/myvpn-doctor/latest.txt из буфера)
+                ```
+                """
+            ),
+        ]
+        if let issueURL = comps.url {
+            NSWorkspace.shared.open(issueURL)
+        }
+        notify(
+            title: "myVPN · Отчёт",
+            body: "Скопирован в буфер · открой GitHub Issues и вставь · \(DoctorStatus.nowStamp())",
+            replacing: "send-report"
+        )
+    }
+
     private func runDoctor() {
-        // No start banner — menu shows «выполняется»; one final user-facing notify.
         runCommand(key: "doctor", work: "Диагностика", timeout: 90, announceStart: false) {
             _ = try MyVPNCLI.doctor()
         } afterSuccess: { [weak self] in
@@ -463,6 +664,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.doctor = DoctorStatus.load()
             let pair = self.doctor.notificationPair
             self.notify(title: pair.title, body: pair.body, replacing: "doctor")
+        }
+    }
+
+    private func checkUpdateFromMenu() {
+        guard !updateInFlight, busyKey == nil else { return }
+        busyKey = "check-update"
+        rebuildMenu()
+        applyIcon()
+        Task { [weak self] in
+            let result = await UpdateChecker.check()
+            await MainActor.run {
+                guard let self else { return }
+                self.busyKey = nil
+                self.lastUpdateCheck = result
+                self.rebuildMenu()
+                self.applyIcon()
+                if result.upToDate {
+                    self.notify(
+                        title: "myVPN · Обновление",
+                        body: result.message,
+                        replacing: "check-update"
+                    )
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = "Доступно обновление"
+                alert.informativeText = result.message + "\n\nСкачать и установить из GitHub Releases?"
+                alert.addButton(withTitle: "Обновить")
+                alert.addButton(withTitle: "Открыть на GitHub")
+                alert.addButton(withTitle: "Позже")
+                NSApp.activate(ignoringOtherApps: true)
+                let choice = alert.runModal()
+                if choice == .alertFirstButtonReturn {
+                    guard let url = result.assetURL else {
+                        if let page = result.releaseURL { NSWorkspace.shared.open(page) }
+                        return
+                    }
+                    self.updateInFlight = true
+                    self.notify(
+                        title: "myVPN · Обновляю",
+                        body: "Ставлю v\(result.latest ?? "?") · \(DoctorStatus.nowStamp())",
+                        replacing: "check-update"
+                    )
+                    Task {
+                        do {
+                            try await UpdateChecker.install(from: url)
+                        } catch {
+                            await MainActor.run {
+                                self.updateInFlight = false
+                                self.notify(
+                                    title: "myVPN ✕ Обновление",
+                                    body: error.localizedDescription,
+                                    replacing: "check-update"
+                                )
+                            }
+                        }
+                    }
+                } else if choice == .alertSecondButtonReturn, let page = result.releaseURL {
+                    NSWorkspace.shared.open(page)
+                }
+            }
         }
     }
 
@@ -475,15 +737,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func openConnectionSettings() {
+    private func openConnectionSettings(section: ConnectionSettingsWindowController.Section = .channels) {
         if connectionSettingsWC == nil {
-            connectionSettingsWC = ConnectionSettingsWindowController(section: .channels)
+            connectionSettingsWC = ConnectionSettingsWindowController(section: section)
         }
-        connectionSettingsWC?.show(section: .channels)
+        connectionSettingsWC?.appDelegate = self
+        connectionSettingsWC?.show(section: section)
     }
 
     private func openHelp() {
-        HelpWindowController.show(using: &connectionSettingsWC)
+        openConnectionSettings(section: .help)
+    }
+
+    // MARK: - Settings bridge
+
+    func settingsRunDoctor() { runDoctor() }
+    func settingsUpdateRules() { updateRules() }
+    func settingsOpenDoctorReport() { openDoctorReport() }
+    func settingsSendDoctorReport() { sendDoctorReportToDeveloper() }
+    func settingsDoctorStatus() -> DoctorStatus { doctor }
+    func settingsRulesStatus() -> RulesStatus { rules }
+    func settingsReloadRules() {
+        rules = RulesStatus.load()
+        if menuIsOpen { rebuildMenu() }
+    }
+    func settingsReloadDoctor() {
+        doctor = DoctorStatus.load()
+        if menuIsOpen { rebuildMenu() }
     }
 
     /// Silent check + optional auto-install (launch + hourly), gated by Update prefs.
@@ -501,14 +781,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 if result.upToDate {
                     self.log("auto-update: up to date — \(result.message)")
+                    self.lastUpdateCheck = result
                     self.updateInFlight = false
+                    if self.menuIsOpen { self.rebuildMenu() }
                     return
                 }
+                self.lastUpdateCheck = result
+                if self.menuIsOpen { self.rebuildMenu() }
                 guard let url = result.assetURL else {
                     self.log("auto-update: newer but no asset — \(result.message)")
                     self.notify(
                         title: "myVPN · Обновление",
-                        body: "\(result.message). Открой Настройки → Update.",
+                        body: "\(result.message). Меню → Проверка обновления.",
                         replacing: "auto-update"
                     )
                     self.updateInFlight = false

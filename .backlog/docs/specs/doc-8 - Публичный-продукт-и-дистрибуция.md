@@ -19,8 +19,8 @@ updated_date: '2026-09-08 12:30'
 | Маршруты | Только `routes[]`; AllowedIPs в `.conf` **не** источник route | Как Clash/sing-box |
 | UI конфигов | Окно: System Helper / Channels / Routes / Shares / Update (+ Справка из меню) | Без submenu в menu bar; автоподключения в блоках Channels/Shares |
 | Обновление app | GitHub Releases + галочки auto-check / auto-install (launch + hourly) + кнопка Update | Деплой = новый Release |
-| Раздача | Только Releases; `install-app.zsh` — только явная отладка / внутри `release.zsh` | README не учит собирать из исходников |
-| Доставка на Mac владельца | Не «закатывать фикс» через install; после `release.zsh` local==Release, дальше только кнопка | Иначе откаты |
+| Раздача | Только Releases; `install-app.zsh` отключён; сборка = `build-app.zsh` внутри `release.zsh` | Нет локального install path |
+| Доставка на Mac владельца | После `release.zsh` — только Update / скачать zip; не копировать stage | Иначе откаты / drift |
 | Списки RU | Отдельный пункт меню | Не путать с обновлением приложения |
 | README | Маркетинг + install/update/configure | Без backlog/CLI/личных IP |
 | Подпись | Ad-hoc (`codesign -`) в v0 | Нет Developer ID; Gatekeeper warning OK |

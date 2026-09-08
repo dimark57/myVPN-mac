@@ -6,6 +6,9 @@ enum HelpWindowController {
         if prefs == nil {
             prefs = ConnectionSettingsWindowController(section: .help)
         }
+        if let app = NSApp.delegate as? AppDelegate {
+            prefs?.appDelegate = app
+        }
         prefs?.show(section: .help)
     }
 }

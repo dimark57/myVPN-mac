@@ -25,15 +25,8 @@ struct DoctorStatus: Equatable, Sendable {
         return stamp.isEmpty ? nil : stamp
     }
 
-    /// One-line right status: `ок · 11:43` / `WARN · endpoint→utun · 11:43`.
-    var rowDetail: String {
-        if primary.isEmpty { return "—" }
-        let time = detailLine.map(Self.clockOnly) ?? ""
-        if primary.hasPrefix("HEALTHY") && !primary.contains("ENDPOINT") {
-            return time.isEmpty ? "ок" : "ок · \(time)"
-        }
-        return time.isEmpty ? menuBadge : "\(menuBadge) · \(time)"
-    }
+    /// One-line right status (legacy/tech). Prefer `menuSeverityDetail` in menu bar.
+    var rowDetail: String { menuSeverityDetail }
 
     private static func clockOnly(_ stamp: String) -> String {
         // "08.09 11:43" → "11:43"
@@ -43,7 +36,21 @@ struct DoctorStatus: Equatable, Sendable {
         return stamp
     }
 
-    /// Compact status for menu under «Диагностика».
+    /// Menu detail under «Провести диагностику»: Без ошибок / Незначительные… / Значительные…
+    var severityLabel: String {
+        if primary.isEmpty { return "нет данных" }
+        switch overall {
+        case "PASS": return "Без ошибок"
+        case "WARN": return "Незначительные ошибки"
+        case "FAIL": return "Значительные ошибки"
+        default:
+            if primary.hasPrefix("HEALTHY_BUT") { return "Незначительные ошибки" }
+            if primary.hasPrefix("HEALTHY") { return "Без ошибок" }
+            return "Значительные ошибки"
+        }
+    }
+
+    /// Compact technical badge (settings / logs).
     var menuBadge: String {
         switch primary {
         case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
@@ -73,6 +80,13 @@ struct DoctorStatus: Equatable, Sendable {
         default:
             return overall.isEmpty ? primary : "\(overall) · \(String(primary.prefix(24)))"
         }
+    }
+
+    /// Right-side menu detail: severity (+ time if known).
+    var menuSeverityDetail: String {
+        if primary.isEmpty { return severityLabel }
+        let time = detailLine.map(Self.clockOnly) ?? ""
+        return time.isEmpty ? severityLabel : "\(severityLabel) · \(time)"
     }
 
     var displayStamp: String {
@@ -133,7 +147,7 @@ struct DoctorStatus: Equatable, Sendable {
         case "EGRESS_NOT_VIA_MACBOOK":
             return "Интернет идёт не через ожидаемый VPN-сервер. Повтори диагностику. \(t)"
         case "MIXED":
-            return "Смотри отчёт диагностики в меню / ~/.cache/myvpn-doctor/latest.txt. \(t)"
+            return "Смотри отчёт в Настройки → Диагностика / ~/.cache/myvpn-doctor/latest.txt. \(t)"
         default:
             return "Код: \(primary.isEmpty ? "—" : primary). \(t)"
         }

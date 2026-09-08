@@ -98,7 +98,11 @@ if [[ -S /var/run/myvpn-helper.sock ]]; then
   "${HOME}/.local/bin/myvpn" down >/dev/null 2>&1 || true
 fi
 
-/bin/zsh "${SRC_TREE}/install-app.zsh"
+print -r -- "ERROR: install-app.zsh отключён. Доставка только через GitHub Releases:" >&2
+print -r -- "  macos/MyVPN/release.zsh [version] → Настройки → Update" >&2
+exit 1
+
+# /bin/zsh "${SRC_TREE}/install-app.zsh"
 
 # Best-effort sync patched Swift back to NAS repo when mounted.
 if [[ -d "${NAS_REPO}/macos/MyVPN/MyVPN" ]]; then
