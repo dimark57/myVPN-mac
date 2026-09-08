@@ -177,7 +177,7 @@ enum DropLogger {
             append("[\(isoNow())] FLAP \(channels) ×\(count) · \(detail)\n")
             return
         }
-        var lines = text.split(whereSeparator: \.isNewline, omittingEmptySubsequences: false).map(String.init)
+        var lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
         while let last = lines.last, last.isEmpty { lines.removeLast() }
         if let last = lines.last,
            last.contains(" DIFF ") || last.contains(" FLAP ") || last.contains(" CONFIRM ") {
@@ -207,7 +207,7 @@ enum DropLogger {
 
     private static func trimIfNeeded() {
         guard let text = try? String(contentsOf: logURL, encoding: .utf8) else { return }
-        let lines = text.split(whereSeparator: \.isNewline, omittingEmptySubsequences: false).map(String.init)
+        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
         guard lines.count > maxLogLines else { return }
         let kept = Array(lines.suffix(maxLogLines)).joined(separator: "\n")
         try? ((kept.hasSuffix("\n") ? kept : kept + "\n")).write(to: logURL, atomically: true, encoding: .utf8)
