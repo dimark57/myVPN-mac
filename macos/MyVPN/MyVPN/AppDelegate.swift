@@ -638,9 +638,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func mountNAS() {
-        DropLogger.logEvent("UI_CMD mount-nas")
-        runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
-            try MyVPNCLI.mountNAS(safe: true)
+        DropLogger.logEvent("UI_CMD mount-nas remount=\(snapshot.nas ? 1 : 0)")
+        let wantRemount = snapshot.nas
+        runCommand(key: "mount-nas", work: wantRemount ? "Перемонтирую NAS" : "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
+            // Remount = unmount → mount (not --safe BUSY abort). Fresh mount stays safe.
+            if wantRemount {
+                try MyVPNCLI.mountNAS(remount: true)
+            } else {
+                try MyVPNCLI.mountNAS(safe: true)
+            }
         } afterSuccess: { [weak self] in
             self?.notify(
                 title: "myVPN ✓ NAS",

@@ -3,7 +3,7 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.13'
+target_version: '0.5.14'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
@@ -18,6 +18,7 @@ target_version: '0.5.13'
 **0.5.11** = cooldown vs DROP: детальный `skip=cooldown … last_primary=`; bypass при *новом* PRIMARY; `EGRESS_PROBE empty keep_cached`; `AUTO_DOCTOR ok=1 soft=1` при timeout + L0 green.
 **0.5.12** = live menu status: NAS SoT = mount table (не зависающий `fileExists`); poll 2с при открытом меню; rebuild во время busy; mount UI soft-ok если том уже жив.
 **0.5.13** = fast up: helper/`MYVPN_QUIET` skip nested auto-nas; `after_up` только `--safe` (без blind `--force`); UI up watchdog 50с; skip mount если NAS уже жив.
+**0.5.14** = UI «Перемонтировать» = `--remount` (unmount→mount, не `--safe` BUSY abort); mount SoT = mount table; soft umount then force.
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 

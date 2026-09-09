@@ -14,7 +14,7 @@ usage() {
 myvpn — Mac split-tunnel (sing-box)
 
   myvpn up | down | status | update-rules | mount-nas | install-autostart
-  myvpn mount-nas [--force]           # remount if stale; --force always
+  myvpn mount-nas [--force|--safe|--remount]  # --remount = unmount→mount (UI)
   myvpn uninstall-autostart
   myvpn autostart [on|off|status]     # flag + menu bar Login Item (не zsh LaunchAgent)
   myvpn auto-nas [on|off|status]      # remount NAS after vpn up / login-boot

@@ -84,9 +84,11 @@ enum MyVPNCLI {
         throw HelperError.notInstalled
     }
 
-    /// `safe: true` → CLI `--safe` (skip force unmount if volume busy).
-    static func mountNAS(force: Bool = false, safe: Bool = false) throws {
+    /// `safe: true` → CLI `--safe` (auto/wake: skip force if busy).
+    /// `remount: true` → CLI `--remount` (UI «Перемонтировать»: unmount → mount).
+    static func mountNAS(force: Bool = false, safe: Bool = false, remount: Bool = false) throws {
         var args = ["mount-nas"]
+        if remount { args.append("--remount") }
         if force { args.append("--force") }
         if safe { args.append("--safe") }
         let result = try run(args, timeout: 120, quiet: true)

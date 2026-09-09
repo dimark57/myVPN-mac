@@ -1,7 +1,8 @@
 # myVPN-mac — AGENTS
 
 Prefix: `MYMAC` · Role: personal → public-ready · Contour: `/Volumes/Nas/Project/myVPN-mac/`  
-GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
+GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)  
+**CD recipe: macos-gh-app**
 
 Клиент split-tunnel на macOS (sing-box + два WG). **Не** продукт you2vpn (`/Project/myVPN`, prefix `BACK`).
 
@@ -28,9 +29,9 @@ GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
 ## Runtime
 
 - **Раздача / установка:** только GitHub Releases (`myVPN.app.zip`). `install-app.zsh` **отключён** (exit 1 → ссылка на Releases).
-- **Обновление у пользователя (включая этот Mac как «прод»):** после `release.zsh` — автопроверка при запуске и каждый час (auto-install) или Настройки → Update. **Не** копировать из stage/DerivedData в `~/Applications`.
+- **Обновление у пользователя (включая этот Mac как «прод»):** после ship — автопроверка при запуске и каждый час (auto-install) или Настройки → Update. **Не** копировать из stage/DerivedData в `~/Applications`.
 - **Запрещено агенту/деплою:** `ditto` / `cp` / `open` бинаря в `~/Applications` в обход Releases.
-- **Публикация релиза:** `macos/MyVPN/release.zsh [version]` → `build-app.zsh` (stage) → zip → `gh release create`. Stage не ставится локально.
+- **Публикация релиза (канон):** навык `cd` → `cd-skill release --confirm --version X.Y.Z` → `macos/MyVPN/ship.zsh` (один bump → commit → tag → zip → gh → push). Legacy: `release.zsh` только package; не вызывать без ship (двойной bump / retag).
 - App у пользователя: `~/Applications/myVPN.app` (из zip или Update), runtime в `Contents/Resources/runtime`
 - CLI symlink: `~/.local/bin/myvpn` → `~/.local/share/myvpn`
 - Helper: LaunchDaemon `local.myvpn.mac.helper`
@@ -42,4 +43,5 @@ Keyword `gv` живёт в **Utilits**. Этот репо — ядро/CLI/app.
 
 ## Навыки
 
-Территория: `/Volumes/Nas/Project/mySkills/skills/` — не копировать в дом.
+Территория: `/Volumes/Nas/Project/mySkills/skills/` — не копировать в дом.  
+Ship/катим → навык **`cd`** (`macos-gh-app`), не ad-hoc субагент с retag.
