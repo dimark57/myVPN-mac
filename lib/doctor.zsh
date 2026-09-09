@@ -82,19 +82,23 @@ myvpn_cmd_doctor() {
   fi
   _doc_check "sing-box" "$sb_ok" "${MYVPN_SING_BOX}"
 
+  # Prod root = app runtime or ~/.local/share. NAS/dev tree = hygiene WARN, not channel FAIL.
   local root_local=0
   case "${MYVPN_ROOT}" in
     "${HOME}/.local/share/myvpn"|"${HOME}/Applications/myVPN.app/Contents/Resources/runtime"|"/Applications/myVPN.app/Contents/Resources/runtime")
       root_local=1
       ;;
     *)
-      # Any path under $HOME or /Applications that is not /Volumes/*
       if [[ "${MYVPN_ROOT}" != /Volumes/* ]]; then
         root_local=1
       fi
       ;;
   esac
-  _doc_check "runtime_local" "$root_local" "${MYVPN_ROOT} (must not be NAS)"
+  if (( root_local )); then
+    _doc_check "runtime_local" "1" "${MYVPN_ROOT}"
+  else
+    _doc_check "runtime_local" "2" "${MYVPN_ROOT} (dev/NAS — prod: app runtime / ~/.local/share/myvpn)"
+  fi
 
   if myvpn_helper_available; then
     _doc_check "helper" "1" "socket $(myvpn_helper_sock)"
@@ -113,10 +117,11 @@ myvpn_cmd_doctor() {
     _doc_evidence "helper socket missing"
   fi
 
+  # Prefer flag; Login Item (SMAppService) only visible from app. Off = INFO preference, not WARN.
   if myvpn_autostart_enabled 2>/dev/null; then
-    _doc_check "autostart" "1" "flag/Login Item"
+    _doc_check "autostart" "1" "flag ~/.config/myvpn/auto-up-on-launch"
   else
-    _doc_check "autostart" "2" "off"
+    _doc_check "autostart" "3" "off (preference — Settings → автоподнятие / myvpn autostart on)"
   fi
 
   if myvpn_auto_nas_enabled; then

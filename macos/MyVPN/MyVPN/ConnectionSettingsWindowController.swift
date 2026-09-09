@@ -275,6 +275,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     private func selectSection(_ s: Section) {
+        uiCmd("sidebar \(s.title)")
         commitChannelEditor()
         commitRouteEditor()
         section = s
@@ -471,6 +472,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func channelClicked() {
+        uiCmd("channel select")
         commitChannelEditor()
         let row = channelTable.clickedRow
         guard row >= 0, row < settings.channels.count else { return }
@@ -506,6 +508,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func defaultToggled() {
+        uiCmd("channel default-toggle")
         guard selectedChannelIndex < settings.channels.count else { return }
         let on = defaultCheck.state == .on
         for i in settings.channels.indices {
@@ -519,6 +522,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func addChannel() {
+        uiCmd("channel add")
         commitChannelEditor()
         let existing = settings.channels.map(\.id)
         let id = AppSettings.slugify("channel", existing: existing)
@@ -532,6 +536,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func removeChannel() {
+        uiCmd("channel remove")
         guard settings.channels.count > 1, selectedChannelIndex < settings.channels.count else {
             setStatus("Нужен хотя бы один канал", ok: false)
             return
@@ -554,6 +559,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func importConf() {
+        uiCmd("channel import")
         guard selectedChannelIndex < settings.channels.count else { return }
         let panel = NSOpenPanel()
         panel.allowsOtherFileTypes = true
@@ -570,6 +576,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func pasteConf() {
+        uiCmd("channel paste")
         guard selectedChannelIndex < settings.channels.count,
               let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else {
             setStatus("Буфер пуст", ok: false)
@@ -672,6 +679,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func routeClicked() {
+        uiCmd("route select")
         commitRouteEditor()
         let row = routeTable.clickedRow
         guard row >= 0, row < settings.routes.count else { return }
@@ -734,6 +742,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func addRoute() {
+        uiCmd("route add")
         commitRouteEditor()
         let r = VPNRoute(
             id: String(UUID().uuidString.prefix(8)),
@@ -749,6 +758,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func removeRoute() {
+        uiCmd("route remove")
         guard selectedRouteIndex < settings.routes.count else { return }
         settings.routes.remove(at: selectedRouteIndex)
         selectedRouteIndex = min(selectedRouteIndex, max(0, settings.routes.count - 1))
@@ -757,6 +767,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func moveRouteUp() {
+        uiCmd("route move-up")
         commitRouteEditor()
         guard selectedRouteIndex > 0 else { return }
         settings.routes.swapAt(selectedRouteIndex, selectedRouteIndex - 1)
@@ -766,6 +777,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func moveRouteDown() {
+        uiCmd("route move-down")
         commitRouteEditor()
         guard selectedRouteIndex + 1 < settings.routes.count else { return }
         settings.routes.swapAt(selectedRouteIndex, selectedRouteIndex + 1)
@@ -839,6 +851,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func helperInstallOrReinstall() {
+        uiCmd("helper install")
         guard !prefsBusy else { return }
         prefsBusy = true
         refreshHelperPane()
@@ -863,6 +876,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func helperUninstall() {
+        uiCmd("helper uninstall")
         guard !prefsBusy else { return }
         prefsBusy = true
         refreshHelperPane()
@@ -911,7 +925,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     @objc private func updateDomainZones() {
         guard !prefsBusy else { return }
-        DropLogger.logEvent("UI_CMD update-rules settings")
+        uiCmd("update-rules")
         prefsBusy = true
         zonesActionButton?.isEnabled = false
         zonesStatusLabel?.stringValue = "Обновляю…"
@@ -1021,6 +1035,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     @objc private func autoDoctorToggled() {
         let on = autoDoctorCheck.state == .on
+        uiCmd("auto-doctor on=\(on ? 1 : 0)")
         AutoDoctor.autoDoctorEnabled = on
         if !on {
             AutoDoctor.autoHealEnabled = false
@@ -1036,6 +1051,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
             return
         }
         let on = autoHealCheck.state == .on
+        uiCmd("auto-heal on=\(on ? 1 : 0)")
         AutoDoctor.autoHealEnabled = on
         setStatus(on ? "Автовосстановление вкл" : "Автовосстановление выкл", ok: true)
     }
@@ -1056,6 +1072,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     @objc private func runDiagnosticsFromSettings() {
         guard !prefsBusy else { return }
+        uiCmd("doctor L1")
         prefsBusy = true
         refreshDiagnosticsButtons()
         setStatus("Диагностика L1…", ok: true)
@@ -1083,16 +1100,19 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func runDeepDiagnosticsFromSettings() {
+        uiCmd("doctor L2")
         appDelegate?.settingsRunDoctorDeep()
         setStatus("L2 запущена — смотри уведомление", ok: true)
     }
 
     @objc private func resumeSafeModeFromSettings() {
+        uiCmd("safe-mode-resume")
         appDelegate?.settingsResumeSafeMode()
         setStatus("Safe Mode снят", ok: true)
     }
 
     @objc private func openDiagnosticsReport() {
+        uiCmd("open-report")
         if let appDelegate {
             appDelegate.settingsOpenDoctorReport()
             return
@@ -1106,6 +1126,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func sendDiagnosticsReport() {
+        uiCmd("send-report → github.com/dimark57/myVPN-mac/issues/new clipboard=1")
         if let appDelegate {
             appDelegate.settingsSendDoctorReport()
             setStatus("Отчёт в буфере · GitHub Issues", ok: true)
@@ -1215,6 +1236,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func autoCheckToggled() {
+        uiCmd("update auto-check on=\(autoCheckBox.state == .on ? 1 : 0)")
         let on = autoCheckBox.state == .on
         UpdateChecker.autoCheckEnabled = on
         autoInstallBox?.isEnabled = on
@@ -1222,12 +1244,14 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func autoInstallToggled() {
+        uiCmd("update auto-install on=\(autoInstallBox.state == .on ? 1 : 0)")
         let on = autoInstallBox.state == .on
         UpdateChecker.autoInstallEnabled = on
         updateStatusLabel?.stringValue = on ? "Автоустановка включена" : "Автоустановка выключена (только уведомление)"
     }
 
     @objc private func checkForUpdate() {
+        uiCmd("update-check")
         guard !prefsBusy else { return }
         prefsBusy = true
         updateActionButton?.isEnabled = false
@@ -1280,7 +1304,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     @objc private func toggleAutostart() {
         guard !prefsBusy, let autostartCheck else { return }
         let next = autostartCheck.state == .on
-        DropLogger.logEvent("UI_CMD autostart on=\(next ? 1 : 0)")
+        uiCmd("autostart on=\(next ? 1 : 0)")
         prefsBusy = true
         autostartCheck.isEnabled = false
         workQueue.async { [weak self] in
@@ -1306,7 +1330,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     @objc private func toggleAutoNAS() {
         guard !prefsBusy, let autoNasCheck else { return }
         let next = autoNasCheck.state == .on
-        DropLogger.logEvent("UI_CMD auto-nas on=\(next ? 1 : 0)")
+        uiCmd("auto-nas on=\(next ? 1 : 0)")
         prefsBusy = true
         autoNasCheck.isEnabled = false
         workQueue.async { [weak self] in
@@ -1529,6 +1553,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func saveAll() {
+        uiCmd("save")
         commitChannelEditor()
         commitRouteEditor()
         if section == .shares {
@@ -1565,11 +1590,13 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     }
 
     @objc private func openWGFolder() {
+        uiCmd("open-wg-folder")
         try? FileManager.default.createDirectory(at: WireGuardProfileStore.directory, withIntermediateDirectories: true)
         NSWorkspace.shared.open(WireGuardProfileStore.directory)
     }
 
     @objc private func closeWindow() {
+        uiCmd("close")
         window?.close()
     }
 }
