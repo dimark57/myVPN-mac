@@ -155,17 +155,32 @@ enum DropLogger {
             return nil
         }
 
+        // Manual Off — never escalate CONFIRM/DROP (wake+Off used to spam 3/2 4/2).
+        if !DesiredStateStore.desiredOn {
+            if hardEdge {
+                append("[\(isoNow())] CONFIRM skip=desired_off\n")
+            }
+            confirmBaseline = nil
+            confirmCount = 0
+            confirmStartedAt = 0
+            return nil
+        }
+
         if hardEdge {
             if confirmBaseline == nil {
                 confirmBaseline = prev
                 confirmStartedAt = Date().timeIntervalSince1970
             }
-            confirmCount += 1
+            if confirmCount < AutoDoctor.dropConfirmNeeded {
+                confirmCount += 1
+            }
             return maybeFire(cur: cur)
         }
 
         if let base = confirmBaseline, cur.hardDropFrom(base) {
-            confirmCount += 1
+            if confirmCount < AutoDoctor.dropConfirmNeeded {
+                confirmCount += 1
+            }
             return maybeFire(cur: cur)
         }
 

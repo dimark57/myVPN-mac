@@ -31,9 +31,9 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.6 ---
+# --- Info.plist 0.5.7 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.6" ]] && pass "version $ver" || bad "version want 0.5.6 got $ver"
+[[ "$ver" == "0.5.7" ]] && pass "version $ver" || bad "version want 0.5.7 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
@@ -49,7 +49,10 @@ done
 # --- WakeRecover 0.5.6: always remount when channel live ---
 WR="${ROOT}/macos/MyVPN/MyVPN/WakeRecover.swift"
 /usr/bin/grep -q 'WAKE_NAS skip=no_channel' "${WR}" && pass "WakeRecover skip=no_channel" || bad "WakeRecover skip=no_channel"
-/usr/bin/grep -q 'remount_stale_ok' "${WR}" && pass "WakeRecover remount_stale_ok" || bad "WakeRecover remount_stale_ok"
+/usr/bin/grep -q 'soft=1\|softOK' "${WR}" && pass "WakeRecover soft-success" || bad "WakeRecover soft-success"
+/usr/bin/grep -q 'HealKind.restart' "${WR}" && pass "WakeRecover heal=restart-only" || bad "WakeRecover heal=restart-only"
+/usr/bin/grep -q 'skip=desired_off' "${ROOT}/macos/MyVPN/MyVPN/DropLogger.swift" && pass "CONFIRM skip=desired_off" || bad "CONFIRM skip=desired_off"
+
 /usr/bin/grep -q 'performWakeHeal\|SLEEP_WAKE_STALE' "${WR}" && pass "WakeRecover SLEEP_WAKE_STALE" || bad "WakeRecover SLEEP_WAKE_STALE"
 heal_line="$(/usr/bin/grep -n 'performWakeHeal\|WAKE_HEAL primary' "${WR}" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
 nas_line="$(/usr/bin/grep -n 'WAKE_NAS mount-nas' "${WR}" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
@@ -63,6 +66,7 @@ if /usr/bin/grep -q 'if wantNAS, !snap.nas' "${WR}"; then
   bad "WakeRecover still skips when nas=1"
 else
   pass "WakeRecover does not skip on nas=1"
+/usr/bin/grep -q 'remount_stale_ok' "${WR}" && pass "WakeRecover remount_stale_ok" || bad "WakeRecover remount_stale_ok"
 fi
 
 # --- HEAL_NAS logged (not silent try?) ---
