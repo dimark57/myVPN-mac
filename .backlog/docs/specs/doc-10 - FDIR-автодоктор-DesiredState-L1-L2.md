@@ -3,14 +3,14 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.1'
+target_version: '0.5.4'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
 
 Связано: **DRAFT-2**, **doc-9 — Автодоктор: таксономия отвалов и heal**, **doc-4**, `DropLogger.swift`, `AutoDoctor.swift`, `lib/doctor.zsh`.  
-Цель релиза: **0.5.1** (hotfixes поверх FDIR 0.5.0). Dual-WG / `render_config` / NE (doc-5) — **не трогать**.
-Первичный FDIR ship был **0.5.0**; 0.5.1 = INTENTIONAL_OFF UX + wake soft-recover.
+Цель релиза: **0.5.4** (wake channel-first). Dual-WG / `render_config` / NE (doc-5) — **не трогать**.
+Первичный FDIR ship был **0.5.0**; 0.5.1–0.5.3 = INTENTIONAL_OFF + wake soft-recover + helper osascript; **0.5.4** = wake: канал → потом NAS.
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 
@@ -57,10 +57,10 @@ PRIMARY / событие: `INTENTIONAL_OFF` (или journal `skip=desired_off`).
 | **Grace** | **60s** | после `up` / `down` / heal / `NSWorkspace.didWake` |
 
 В grace: Detect+L0 можно писать FLAP/DIFF; **pipeline heal skip=`grace`** (restart/`TUN_DOWN→up` через DropLogger).  
-**Carve-out 0.5.1:** `WakeRecover` после `didWake` **может** `pin-endpoints` + `mount-nas --safe` во время grace; полный `down→up` только при `SLEEP_WAKE_STALE` (cooldown всё ещё действует).
+**Carve-out 0.5.1+:** `WakeRecover` после `didWake` **может** heal/pin/mount во время grace; DropLogger→pipeline restart по-прежнему `skip=grace`.
 
-Wake (0.5.1): settle **10s** → L0 → pin → NAS remount (если desired ON) → при egress dead — PRIMARY `SLEEP_WAKE_STALE` → один restart+mount.  
-Не: disconnect-on-sleep; не: kill на каждый wake.
+Wake (**0.5.4** channel-first): settle **10s** → L0 → при `tun` + (ip пуст **или** `!macbook`) — PRIMARY `SLEEP_WAKE_STALE` → один `down→up` → pin только если restart не делали → **`mount-nas --safe` только если** `tun && (home||macbook)`; иначе `WAKE_NAS skip=no_channel`.
+Не: disconnect-on-sleep; не: kill на каждый wake; не: NAS до проверки канала.
 
 ## 5. ICMP peer ≠ DROP_CONFIRMED
 

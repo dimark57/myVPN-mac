@@ -82,7 +82,7 @@ Menu-bar клиент для macOS: несколько именованных Wi
 Вердикт справа: **Значительные** = tun/интернет/home; **Незначительные** = SMB/DNS (heal всё равно по коду); **Выключен вами** = ручной Off (не ошибка). Журнал и `report-*.txt` копятся — не чистить.
 
 При отвале каналов (если галочки ON): auto `doctor` → журнал `~/.cache/myvpn-doctor/` → heal (`down→up` / `mount-nas` / `flush-dns`) с cooldown.  
-После сна (wake): soft-recover — pin endpoints + remount NAS; полный restart только если интернет мёртв (`SLEEP_WAKE_STALE`). После обновления 0.5.1: **Настройки → System Helper → переустановить** (для `pin-endpoints`).
+После сна (wake): **сначала** канал (L0 → restart при zombie egress), **потом** remount NAS только если peers живы. После обновления: **Настройки → System Helper → переустановить** при необходимости (pin-endpoints).
 
 Логи: `~/Library/Logs/myvpn-menubar.log`, `~/.config/myvpn/sing-box.log`, `~/.cache/myvpn-doctor/drops.log`.
 

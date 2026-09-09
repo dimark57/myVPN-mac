@@ -1,9 +1,9 @@
 import Foundation
 
-/// Soft recover after `NSWorkspace.didWake` (doc-10 / 0.5.1).
+/// Soft recover after `NSWorkspace.didWake` (doc-10 / 0.5.4).
 /// Uses: DesiredStateStore, AutoDoctor, MyVPNCLI, DropLogger, FlightRecorder, StatusSnapshot.
-/// Grace still blocks DropLogger→pipeline restart-heal; this path may pin + mount-nas and,
-/// only if egress is dead, one SLEEP_WAKE_STALE restart (cooldown still applies).
+/// Channel-first: L0 → SLEEP_WAKE_STALE restart if needed → pin (if no restart) → NAS only if channel live.
+/// Grace still blocks DropLogger→pipeline restart-heal; this path bypasses that for wake.
 enum WakeRecover {
     static let queue = DispatchQueue(label: "local.myvpn.mac.wake-recover", qos: .utility)
 
@@ -55,7 +55,7 @@ enum WakeRecover {
                 return
             }
 
-            // L0 after settle
+            // L0 after settle — channel probe before any NAS work (0.5.4).
             var snap = MyVPNCLI.status(includePublicIP: true)
             FlightRecorder.append(sample: snap, sessionCid: sessionCid, wake: true)
             DropLogger.logEvent(
@@ -63,123 +63,135 @@ enum WakeRecover {
             )
             DispatchQueue.main.async { callbacks.onSnapshot(snap) }
 
-            // Re-pin WG endpoints via LAN gw (best-effort; needs helper ≥0.5.1).
-            do {
-                try MyVPNCLI.pinEndpoints()
-                DropLogger.logEvent("WAKE_PIN ok=1")
-            } catch {
-                DropLogger.logEvent("WAKE_PIN ok=0 err=\(error.localizedDescription)")
+            // SLEEP_WAKE_STALE first: zombie tun + dead egress — restart before pin/NAS.
+            var didRestart = false
+            let egressDead = snap.tun && (snap.ip.isEmpty || !snap.macbook)
+            if AutoDoctor.autoHealEnabled, egressDead {
+                didRestart = performWakeHeal(callbacks: callbacks)
+                snap = MyVPNCLI.status(includePublicIP: true)
+                DispatchQueue.main.async { callbacks.onSnapshot(snap) }
             }
 
-            // NAS fast-path — not blocked by grace (doc-10 carve-out).
-            let wantNAS = MyVPNCLI.autoNASEnabled() || AutoDoctor.autoHealEnabled
-            if wantNAS, snap.tun, !snap.nas {
-                DropLogger.logEvent("WAKE_NAS mount-nas --safe")
-                DispatchQueue.main.async {
-                    callbacks.onNotify(
-                        "myVPN · После сна",
-                        "Монтирую NAS · \(DoctorStatus.nowStamp())",
-                        "wake-nas"
-                    )
-                }
+            // Pin only if we did not just restart (up already pins).
+            if !didRestart {
                 do {
-                    try MyVPNCLI.mountNAS(force: false, safe: true)
-                    snap = MyVPNCLI.status(includePublicIP: false)
-                    DropLogger.logEvent("WAKE_NAS ok=\(snap.nas ? 1 : 0)")
+                    try MyVPNCLI.pinEndpoints()
+                    DropLogger.logEvent("WAKE_PIN ok=1")
+                } catch {
+                    DropLogger.logEvent("WAKE_PIN ok=0 err=\(error.localizedDescription)")
+                }
+            }
+
+            // NAS only when channel is alive — no share probe on dead tunnel.
+            let channelLive = snap.tun && (snap.home || snap.macbook)
+            let wantNAS = MyVPNCLI.autoNASEnabled() || AutoDoctor.autoHealEnabled
+            if wantNAS, !snap.nas {
+                if !channelLive {
+                    DropLogger.logEvent("WAKE_NAS skip=no_channel")
+                } else {
+                    DropLogger.logEvent("WAKE_NAS mount-nas --safe")
                     DispatchQueue.main.async {
-                        callbacks.onSnapshot(snap)
-                        if snap.nas {
+                        callbacks.onNotify(
+                            "myVPN · После сна",
+                            "Монтирую NAS · \(DoctorStatus.nowStamp())",
+                            "wake-nas"
+                        )
+                    }
+                    do {
+                        try MyVPNCLI.mountNAS(force: false, safe: true)
+                        snap = MyVPNCLI.status(includePublicIP: false)
+                        DropLogger.logEvent("WAKE_NAS ok=\(snap.nas ? 1 : 0)")
+                        DispatchQueue.main.async {
+                            callbacks.onSnapshot(snap)
+                            if snap.nas {
+                                callbacks.onNotify(
+                                    "myVPN ✓ NAS",
+                                    "Смонтирован после wake · \(DoctorStatus.nowStamp())",
+                                    "wake-nas"
+                                )
+                            }
+                        }
+                    } catch {
+                        DropLogger.logEvent("WAKE_NAS ok=0 err=\(error.localizedDescription)")
+                        DispatchQueue.main.async {
                             callbacks.onNotify(
-                                "myVPN ✓ NAS",
-                                "Смонтирован после wake · \(DoctorStatus.nowStamp())",
+                                "myVPN · NAS после сна",
+                                error.localizedDescription,
                                 "wake-nas"
                             )
                         }
                     }
-                } catch {
-                    DropLogger.logEvent("WAKE_NAS ok=0 err=\(error.localizedDescription)")
-                    DispatchQueue.main.async {
-                        callbacks.onNotify(
-                            "myVPN · NAS после сна",
-                            error.localizedDescription,
-                            "wake-nas"
-                        )
-                    }
                 }
             }
 
-            // SLEEP_WAKE_STALE: tun alive, egress dead after settle → one restart.
-            snap = MyVPNCLI.status(includePublicIP: true)
-            let egressDead = snap.tun && snap.ip.isEmpty && !snap.macbook
-            guard AutoDoctor.autoHealEnabled, egressDead else {
-                DispatchQueue.main.async { callbacks.onRefresh(true) }
-                return
-            }
+            DispatchQueue.main.async { callbacks.onRefresh(true) }
+        }
+    }
 
-            let primary = "SLEEP_WAKE_STALE"
-            let kind = AutoDoctor.healKind(for: primary)
-            let gate = AutoDoctor.canHealNow(primary: primary, kind: kind)
-            guard gate.ok else {
-                DropLogger.logEvent("WAKE_HEAL skip=\(gate.reason ?? "gate") primary=\(primary)")
-                DispatchQueue.main.async {
-                    callbacks.onNotify(
-                        "myVPN · Wake heal отложен",
-                        "\(gate.reason ?? "cooldown") · \(DoctorStatus.nowStamp())",
-                        "wake-heal"
-                    )
-                    callbacks.onRefresh(true)
-                }
-                return
-            }
-
-            DropLogger.logEvent("WAKE_HEAL primary=\(primary) action=\(AutoDoctor.kindLabel(kind))")
+    /// One SLEEP_WAKE_STALE restart. Returns true if heal was attempted (gate ok).
+    @discardableResult
+    private static func performWakeHeal(callbacks: Callbacks) -> Bool {
+        let primary = "SLEEP_WAKE_STALE"
+        let kind = AutoDoctor.healKind(for: primary)
+        let gate = AutoDoctor.canHealNow(primary: primary, kind: kind)
+        guard gate.ok else {
+            DropLogger.logEvent("WAKE_HEAL skip=\(gate.reason ?? "gate") primary=\(primary)")
             DispatchQueue.main.async {
                 callbacks.onNotify(
-                    "myVPN · После сна",
-                    "Восстанавливаю туннель · \(DoctorStatus.nowStamp())",
+                    "myVPN · Wake heal отложен",
+                    "\(gate.reason ?? "cooldown") · \(DoctorStatus.nowStamp())",
                     "wake-heal"
                 )
             }
+            return false
+        }
 
-            do {
-                try AutoDoctor.performHeal(kind)
-                DesiredStateStore.setDesiredOn()
-                let verified = AutoDoctor.verifyAfterHeal(kind: kind)
-                if verified {
-                    AutoDoctor.recordHeal(kind: kind, primary: primary, verified: true)
-                    DropLogger.logEvent("WAKE_HEAL ok=1 verify=1 primary=\(primary)")
-                    DispatchQueue.main.async {
-                        callbacks.onNotify(
-                            "myVPN ✓ После сна",
-                            "Туннель восстановлен · \(DoctorStatus.nowStamp())",
-                            "wake-heal"
-                        )
-                        callbacks.onRefresh(true)
-                    }
-                } else {
-                    HealCircuitBreaker.recordVerifyFail()
-                    DropLogger.logEvent("WAKE_HEAL ok=0 verify=0 primary=\(primary)")
-                    DispatchQueue.main.async {
-                        callbacks.onNotify(
-                            "myVPN ✕ После сна",
-                            "Heal не подтвердился · \(DoctorStatus.nowStamp())",
-                            "wake-heal"
-                        )
-                        callbacks.onRefresh(true)
-                    }
+        DropLogger.logEvent("WAKE_HEAL primary=\(primary) action=\(AutoDoctor.kindLabel(kind))")
+        DispatchQueue.main.async {
+            callbacks.onNotify(
+                "myVPN · После сна",
+                "Восстанавливаю туннель · \(DoctorStatus.nowStamp())",
+                "wake-heal"
+            )
+        }
+
+        do {
+            try AutoDoctor.performHeal(kind)
+            DesiredStateStore.setDesiredOn()
+            let verified = AutoDoctor.verifyAfterHeal(kind: kind)
+            if verified {
+                AutoDoctor.recordHeal(kind: kind, primary: primary, verified: true)
+                DropLogger.logEvent("WAKE_HEAL ok=1 verify=1 primary=\(primary)")
+                DispatchQueue.main.async {
+                    callbacks.onNotify(
+                        "myVPN ✓ После сна",
+                        "Туннель восстановлен · \(DoctorStatus.nowStamp())",
+                        "wake-heal"
+                    )
                 }
-            } catch {
+            } else {
                 HealCircuitBreaker.recordVerifyFail()
-                DropLogger.logEvent("WAKE_HEAL ok=0 err=\(error.localizedDescription)")
+                DropLogger.logEvent("WAKE_HEAL ok=0 verify=0 primary=\(primary)")
                 DispatchQueue.main.async {
                     callbacks.onNotify(
                         "myVPN ✕ После сна",
-                        error.localizedDescription,
+                        "Heal не подтвердился · \(DoctorStatus.nowStamp())",
                         "wake-heal"
                     )
-                    callbacks.onRefresh(true)
                 }
             }
+            return true
+        } catch {
+            HealCircuitBreaker.recordVerifyFail()
+            DropLogger.logEvent("WAKE_HEAL ok=0 err=\(error.localizedDescription)")
+            DispatchQueue.main.async {
+                callbacks.onNotify(
+                    "myVPN ✕ После сна",
+                    error.localizedDescription,
+                    "wake-heal"
+                )
+            }
+            return true
         }
     }
 }

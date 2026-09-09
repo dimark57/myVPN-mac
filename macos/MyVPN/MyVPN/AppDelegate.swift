@@ -553,7 +553,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func turnOn() {
         DesiredStateStore.setDesiredOn()
         HealCircuitBreaker.resume(reason: "user_on")
-        runCommand(key: "up", work: "Включаю VPN") {
+        runCommand(key: "up", work: "Включаю VPN", timeout: 35) {
             try MyVPNCLI.up()
         } afterSuccess: { [weak self] in
             guard let self else { return }
@@ -581,7 +581,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func turnOff() {
         DesiredStateStore.setDesiredOff()
-        runCommand(key: "down", work: "Выключаю VPN") {
+        runCommand(key: "down", work: "Выключаю VPN", timeout: 35) {
             try MyVPNCLI.down()
         } afterSuccess: { [weak self] in
             DesiredStateStore.setDesiredOff()
@@ -672,7 +672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctor() {
-        runCommand(key: "doctor", work: "Диагностика L1", timeout: 15, announceStart: false) {
+        runCommand(key: "doctor", work: "Диагностика L1", timeout: 25, announceStart: false) {
             _ = try MyVPNCLI.doctor(deep: false)
         } afterSuccess: { [weak self] in
             guard let self else { return }

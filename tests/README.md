@@ -1,7 +1,7 @@
 # Tests (doc-6)
 
 - `static-check.zsh` — статика без секретов (фикстуры + render + sing-box check).
-- `fdir-policy.zsh` — FDIR 0.5.1: L1 doctor markers, `--safe` mount, pin-endpoints, WakeRecover, INTENTIONAL_OFF, version 0.5.1.
+- `fdir-policy.zsh` — FDIR 0.5.4: wake channel-first (heal before NAS), UI timeouts, INTENTIONAL_OFF, version 0.5.4.
 - `auto-up-boot-race.zsh` — регрессия auto-up при логине (ожидание helper socket; **без** live down/up).
 - `cycle-myvpn.zsh` — живой цикл: down → up → C* → down → restore (`MYVPN_CYCLE_RESTORE=myvpn|app`).
 - `fixtures/` — фейковые `macbook.conf` / `home.conf` (DNS=1.1.1.1 намеренно, чтобы проверить что system DNS не копируется).
