@@ -7,6 +7,11 @@ enum DesiredStateStore {
     private static let graceUntilKey = "local.myvpn.mac.graceUntil"
     private static let intentionalOffAtKey = "local.myvpn.mac.intentionalOffAt"
 
+    /// Shared with CLI doctor (`lib/doctor.zsh`) — SoT for INTENTIONAL_OFF.
+    static var flagURL: URL {
+        URL(fileURLWithPath: NSHomeDirectory() + "/.config/myvpn/desired.json")
+    }
+
     /// Default ON (nil → true) so first launch / upgrade keeps auto-up behavior.
     static var desiredOn: Bool {
         get {
@@ -14,7 +19,10 @@ enum DesiredStateStore {
             if d.object(forKey: desiredKey) == nil { return true }
             return d.bool(forKey: desiredKey)
         }
-        set { UserDefaults.standard.set(newValue, forKey: desiredKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: desiredKey)
+            persistFlag(on: newValue)
+        }
     }
 
     static var graceUntil: TimeInterval {
@@ -49,5 +57,23 @@ enum DesiredStateStore {
 
     static func clearGrace() {
         graceUntil = 0
+    }
+
+    /// Mirror to disk so `myvpn doctor` can say INTENTIONAL_OFF instead of FAIL.
+    private static func persistFlag(on: Bool) {
+        let dir = flagURL.deletingLastPathComponent().path
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let obj: [String: Any] = [
+            "on": on ? 1 : 0,
+            "ts": ISO8601DateFormatter().string(from: Date()),
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]) {
+            try? data.write(to: flagURL, options: .atomic)
+        }
+    }
+
+    /// Call once at launch so CLI sees current latch even if flag was never written.
+    static func ensureFlagFile() {
+        persistFlag(on: desiredOn)
     }
 }

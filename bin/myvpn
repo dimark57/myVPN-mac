@@ -22,6 +22,7 @@ myvpn — Mac split-tunnel (sing-box)
   myvpn doctor       # L1 triage ≤~8s (~/.cache/myvpn-doctor/)
   myvpn doctor --deep  # L2 full probes (dig/hub/nas_alive)
   myvpn flush-dns    # clear mDNSResponder (Hub 403 after stale 94…)
+  myvpn pin-endpoints  # re-pin WG endpoint /32 via LAN gw (wake / heal)
   myvpn login-boot   # legacy LaunchAgent (prefer app + helper)
   myvpn render       # regenerate JSON only
 EOF
@@ -281,6 +282,10 @@ main() {
     update-rules) cmd_update_rules "$@" ;;
     mount-nas) myvpn_cmd_mount_nas "$@" ;;
     flush-dns) myvpn_flush_dns "$@" ;;
+    pin-endpoints)
+      myvpn_pin_endpoint_routes
+      print -r -- "pin-endpoints done"
+      ;;
     install-autostart) cmd_install_autostart "$@" ;;
     uninstall-autostart) cmd_uninstall_autostart "$@" ;;
     autostart) cmd_autostart "$@" ;;

@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyIcon()
         rules = RulesStatus.load()
         doctor = DoctorStatus.load()
+        DesiredStateStore.ensureFlagFile()
         rebuildMenu()
         refreshStatus()
         refreshPrefs()
@@ -1169,13 +1170,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            DesiredStateStore.enterGrace(seconds: AutoDoctor.postChangeGraceSeconds)
-            DropLogger.logEvent("WAKE grace=\(Int(AutoDoctor.postChangeGraceSeconds))с")
             FlightRecorder.append(sample: self.snapshot, sessionCid: self.sessionCid, wake: true)
-            // Re-pin happens inside next up; soft refresh with egress after settle.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-                self?.refreshStatus(includePublicIP: true)
-            }
+            // Soft recover: settle → L0 → pin → mount-nas; restart only if SLEEP_WAKE_STALE.
+            WakeRecover.schedule(
+                sessionCid: self.sessionCid,
+                callbacks: WakeRecover.Callbacks(
+                    onSnapshot: { [weak self] snap in
+                        guard let self else { return }
+                        self.snapshot = snap
+                        self.applyIcon()
+                        if self.menuIsOpen { self.rebuildMenu() }
+                    },
+                    onNotify: { [weak self] title, body, key in
+                        self?.notify(title: title, body: body, replacing: key)
+                    },
+                    onRefresh: { [weak self] includeIP in
+                        self?.refreshStatus(includePublicIP: includeIP)
+                    }
+                )
+            )
         }
     }
 

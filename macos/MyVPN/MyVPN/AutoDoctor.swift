@@ -35,8 +35,11 @@ enum AutoDoctor {
     static let dropConfirmNeeded = 2
     /// Wall-clock between first CONFIRM and DROP_CONFIRMED (doc-10).
     static let dropConfirmMinSeconds: TimeInterval = 20
-    /// Suppress auto pipeline after up/down/heal/wake.
+    /// Suppress DropLogger→pipeline *restart* heal after up/down/heal/wake.
+    /// WakeRecover may still pin + mount-nas during grace (0.5.1 carve-out).
     static let postChangeGraceSeconds: TimeInterval = 60
+    /// Network settle after didWake before L0 / NAS / egress check.
+    static let wakeSettleSeconds: TimeInterval = 10
     static let verifyFailsToSafeMode = 2
     static let safeModeHoldSeconds: TimeInterval = 300
     /// L1 doctor process budget (auto + default CLI).

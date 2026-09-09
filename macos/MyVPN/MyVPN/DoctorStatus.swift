@@ -44,6 +44,7 @@ struct DoctorStatus: Equatable, Sendable {
     /// Menu detail under «Провести диагностику»: Без ошибок / Незначительные… / Значительные…
     var severityLabel: String {
         if primary.isEmpty { return "нет данных" }
+        if primary == "INTENTIONAL_OFF" { return "Выключен вами" }
         switch overall {
         case "PASS": return "Без ошибок"
         case "WARN": return "Незначительные ошибки"
@@ -60,6 +61,8 @@ struct DoctorStatus: Equatable, Sendable {
         switch primary {
         case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
             return "ок"
+        case "INTENTIONAL_OFF":
+            return "выкл · вами"
         case "HEALTHY_BUT_ENDPOINT_VIA_TUN":
             return "WARN · endpoint→utun"
         case "TUN_DOWN":
@@ -76,6 +79,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "WARN · NAS stale"
         case "NAS_MOUNT_ONLY":
             return "WARN · NAS unmounted"
+        case "SLEEP_WAKE_STALE":
+            return "FAIL · после сна"
         case "DNS_STALE":
             return "WARN · DNS"
         case "CONFLICT_WG_APP":
@@ -105,6 +110,8 @@ struct DoctorStatus: Equatable, Sendable {
         switch primary {
         case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
             return "Всё в порядке"
+        case "INTENTIONAL_OFF":
+            return "Выключен вами"
         case "HEALTHY_BUT_ENDPOINT_VIA_TUN":
             return "Работает, есть риск отвала"
         case "TUN_DOWN":
@@ -117,6 +124,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "Домашний канал недоступен"
         case "NAS_STALE", "NAS_MOUNT_ONLY":
             return "Проблема с NAS"
+        case "SLEEP_WAKE_STALE":
+            return "После сна нет интернета"
         case "DNS_STALE":
             return "Сбились DNS"
         case "CONFLICT_WG_APP":
@@ -135,6 +144,8 @@ struct DoctorStatus: Equatable, Sendable {
         switch primary {
         case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
             return "VPN и NAS работают нормально. \(t)"
+        case "INTENTIONAL_OFF":
+            return "Вы сами выключили VPN — это не ошибка. Нажми «Включить», когда понадобится. \(t)"
         case "HEALTHY_BUT_ENDPOINT_VIA_TUN":
             return "Сейчас всё доступно, но маршрут к серверам VPN идёт через туннель. После сна или смены сети соединение может отвалиться. \(t)"
         case "TUN_DOWN":
@@ -151,6 +162,8 @@ struct DoctorStatus: Equatable, Sendable {
             return "Диск NAS «завис». Нажми «Перемонтировать NAS». \(t)"
         case "NAS_MOUNT_ONLY":
             return "Сеть до NAS есть, том не смонтирован. Нажми «Смонтировать NAS». \(t)"
+        case "SLEEP_WAKE_STALE":
+            return "После пробуждения туннель есть, а интернет нет. Автовосстановление: Выключить→Включить. \(t)"
         case "DNS_STALE":
             return "DNS Wi‑Fi не указывает на VPN. В терминале: myvpn flush-dns. \(t)"
         case "CONFLICT_WG_APP":
@@ -166,6 +179,9 @@ struct DoctorStatus: Equatable, Sendable {
 
     /// Notification title + body for Notification Center.
     var notificationPair: (title: String, body: String) {
+        if primary == "INTENTIONAL_OFF" {
+            return ("myVPN · Выключен вами", userBody)
+        }
         let mark: String
         switch overall {
         case "PASS": mark = "✓"
@@ -228,6 +244,12 @@ struct DoctorStatus: Equatable, Sendable {
                     s.overall = rest.split(separator: " ").first.map(String.init) ?? rest
                 }
             }
+        }
+        // Manual Off → never show as «Значительные ошибки» (doc-10).
+        if !DesiredStateStore.desiredOn && (s.primary == "TUN_DOWN" || s.primary == "INTENTIONAL_OFF") {
+            s.primary = "INTENTIONAL_OFF"
+            s.overall = "PASS"
+            s.confidence = "high"
         }
         return s
     }

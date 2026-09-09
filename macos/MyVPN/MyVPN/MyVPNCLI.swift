@@ -95,6 +95,27 @@ enum MyVPNCLI {
         }
     }
 
+    /// Re-pin WG endpoint /32 via LAN gateway (needs helper ≥0.5.1 or admin).
+    /// Uses: helper `pin-endpoints` → CLI `pin-endpoints` → `myvpn_pin_endpoint_routes`.
+    static func pinEndpoints() throws {
+        if MyVPNHelper.isAvailable {
+            do {
+                _ = try MyVPNHelper.send("pin-endpoints", timeout: 20)
+                return
+            } catch {
+                // Old helper without pin — fall through to CLI (may need admin).
+            }
+        }
+        let result = try run(["pin-endpoints"], timeout: 30, quiet: true)
+        if result.status != 0 {
+            throw MyVPNCLIError.failed(
+                command: "pin-endpoints",
+                exitCode: result.status,
+                stderr: result.stderr + result.stdout
+            )
+        }
+    }
+
     static func updateRules() throws {
         let result = try run(["update-rules"], timeout: 300, quiet: true)
         if result.status != 0 {

@@ -488,11 +488,26 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     VERDICT_LINES+=("WireGuard.app и myvpn (sing-box) одновременно — типичный источник «отвалов» и битых маршрутов.")
     _doc_action "выключи туннели в WireGuard.app, оставь только myVPN"
   elif (( tun == 0 )); then
-    primary="TUN_DOWN"
-    confidence="high"
-    VERDICT_LINES+=("sing-box не запущен (tun=0). Split-tunnel целиком выключен.")
-    _doc_action "myvpn up  (или On в меню)"
-    _doc_evidence "tun=0"
+    # DesiredState latch from menu/CLI (doc-10) — Off by user is not an outage.
+    local desired_on=1
+    if [[ -f "${MYVPN_HOME}/desired.json" ]]; then
+      desired_on="$(/usr/bin/python3 -c 'import json,sys; print(1 if json.load(open(sys.argv[1])).get("on",1) else 0)' "${MYVPN_HOME}/desired.json" 2>/dev/null || echo 1)"
+    fi
+    if [[ "${desired_on}" == "0" ]]; then
+      primary="INTENTIONAL_OFF"
+      confidence="high"
+      VERDICT_LINES+=("VPN выключен вами (DesiredState off) — это не авария.")
+      VERDICT_LINES+=("Автовосстановление не требуется. Нажми «Включить», когда понадобится.")
+      _doc_action "ничего — ожидаемое Off; или myvpn up / Включить в меню"
+      _doc_evidence "desired.json on=0 · tun=0"
+      _doc_check "desired_off" "1" "intentional Off — не FAIL"
+    else
+      primary="TUN_DOWN"
+      confidence="high"
+      VERDICT_LINES+=("sing-box не запущен (tun=0). Split-tunnel целиком выключен.")
+      _doc_action "myvpn up  (или On в меню)"
+      _doc_evidence "tun=0"
+    fi
   elif (( tun == 1 && underlay_dead && egress_via_macbook == 0 && ${#pub} == 0 )); then
     primary="UNDERLAY_DOWN"
     confidence="high"
@@ -626,14 +641,16 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
   # PRIMARY is the human severity. Heal maps PRIMARY, not OVERALL.
   # FAIL = tun/underlay/egress/home/conflict. WARN = SMB/DNS/endpoint-via-tun.
   case "$primary" in
-    HEALTHY|HEALTHY_ICMP_FALSE_ALARM) overall="PASS" ;;
+    HEALTHY|HEALTHY_ICMP_FALSE_ALARM|INTENTIONAL_OFF) overall="PASS" ;;
     HEALTHY_BUT_ENDPOINT_VIA_TUN|NAS_STALE|NAS_MOUNT_ONLY|DNS_STALE|EGRESS_NOT_VIA_MACBOOK) overall="WARN" ;;
     UNDERLAY_DOWN|TUN_DOWN|MACBOOK_EGRESS_DOWN|HOME_PEER_DOWN|HOME_DOWN_MACBOOK_OK|CONFLICT_WG_APP) overall="FAIL" ;;
   esac
   # PASS + residual soft fails → don't show fail=N (dns sample noise).
   local fail_show="${FAIL_COUNT}" warn_show="${WARN_COUNT}"
-  if [[ "$overall" == "PASS" ]]; then
+  if [[ "$overall" == "PASS" || "$primary" == "INTENTIONAL_OFF" ]]; then
+    overall="PASS"
     fail_show=0
+    warn_show=0
   fi
 
   {

@@ -84,7 +84,7 @@ def handle(cmd: str) -> str:
     cmd = cmd.strip().lower()
     if cmd == "ping":
         return "ok ready"
-    if cmd in ("up", "down"):
+    if cmd in ("up", "down", "pin-endpoints"):
         with _lock:
             code, detail = run_myvpn(cmd)
         if code == 0:

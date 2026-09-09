@@ -79,9 +79,10 @@ Menu-bar клиент для macOS: несколько именованных Wi
 Меню → **Провести диагностику** (вердикт справа).  
 **Настройки → Диагностика:** галочки автодиагностики / автовосстановления (по умолчанию вкл), коды отвалов, журнал `drops.log`, отчёт / «Отправить разработчику».
 
-Вердикт справа: **Значительные** = tun/интернет/home; **Незначительные** = SMB/DNS (heal всё равно по коду). Журнал и `report-*.txt` копятся — не чистить.
+Вердикт справа: **Значительные** = tun/интернет/home; **Незначительные** = SMB/DNS (heal всё равно по коду); **Выключен вами** = ручной Off (не ошибка). Журнал и `report-*.txt` копятся — не чистить.
 
-При отвале каналов (если галочки ON): auto `doctor` → журнал `~/.cache/myvpn-doctor/` → heal (`down→up` / `mount-nas` / `flush-dns`) с cooldown.
+При отвале каналов (если галочки ON): auto `doctor` → журнал `~/.cache/myvpn-doctor/` → heal (`down→up` / `mount-nas` / `flush-dns`) с cooldown.  
+После сна (wake): soft-recover — pin endpoints + remount NAS; полный restart только если интернет мёртв (`SLEEP_WAKE_STALE`). После обновления 0.5.1: **Настройки → System Helper → переустановить** (для `pin-endpoints`).
 
 Логи: `~/Library/Logs/myvpn-menubar.log`, `~/.config/myvpn/sing-box.log`, `~/.cache/myvpn-doctor/drops.log`.
 
