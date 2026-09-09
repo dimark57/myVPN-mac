@@ -131,6 +131,7 @@ enum AutoDoctorPipeline {
                             "\(gate.reason ?? "cooldown") · \(DoctorStatus.nowStamp())",
                             "auto-heal"
                         )
+                        // Explicit matrix line for drops (0.5.11) — reason already in skip=.
                         finish(callbacks: callbacks)
                     }
                     return
@@ -206,14 +207,38 @@ enum AutoDoctorPipeline {
                     }
                 }
             } catch {
-                DropLogger.logEvent("AUTO_DOCTOR ok=0 err=\(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    callbacks.onNotify(
-                        "myVPN ✕ Автодиагностика",
-                        error.localizedDescription,
-                        "auto-doctor"
+                // Soft-success (0.5.11): L1 doctor timeout while L0 already green — no false ✕.
+                let softOK = AutoDoctor.isSoftHealOK(kind: .restart)
+                if softOK {
+                    DropLogger.logEvent(
+                        "AUTO_DOCTOR ok=1 soft=1 err=\(error.localizedDescription) — L0 green, skip heal"
                     )
-                    finish(callbacks: callbacks)
+                    IncidentStore.attachHeal(
+                        cid: event.cid,
+                        attempted: false,
+                        ok: 1,
+                        action: "none",
+                        skipped: "doctor_soft"
+                    )
+                    DispatchQueue.main.async {
+                        callbacks.onNotify(
+                            "myVPN · Автодиагностика",
+                            "L0 ок (doctor soft) · \(DoctorStatus.nowStamp())",
+                            "auto-doctor"
+                        )
+                        finish(callbacks: callbacks)
+                        callbacks.onRefresh(true)
+                    }
+                } else {
+                    DropLogger.logEvent("AUTO_DOCTOR ok=0 err=\(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        callbacks.onNotify(
+                            "myVPN ✕ Автодиагностика",
+                            error.localizedDescription,
+                            "auto-doctor"
+                        )
+                        finish(callbacks: callbacks)
+                    }
                 }
             }
         }

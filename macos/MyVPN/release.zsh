@@ -3,7 +3,6 @@
 # Does NOT install to ~/Applications — users update via Releases / in-app Update.
 # Does NOT open stage / DerivedData myVPN.app (dual NSStatusItem — closed in 0.5.8).
 # Usage: macos/MyVPN/release.zsh [version]
-# Example: macos/MyVPN/release.zsh 0.3.0
 set -euo pipefail
 ROOT="$(cd "${0:A:h}/../.." && pwd)"
 APP_DIR="${ROOT}/macos/MyVPN"
@@ -14,7 +13,6 @@ if [[ -z "${VERSION}" ]]; then
   VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${PLIST}" 2>/dev/null || echo "0.0.0")"
 fi
 
-# Bump short version if passed
 if [[ -n "${1:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PLIST}"
   BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${PLIST}" 2>/dev/null || echo 0)"
@@ -43,16 +41,15 @@ gh release create "${TAG}" "${ZIP}" "${SHA}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
   --notes "$(cat <<EOF
-## myVPN ${VERSION} — auto-heal soft-success
+## myVPN ${VERSION} — cooldown vs DROP clarity
 
-In-app: **Настройки → Update → Проверить обновление**.
+In-app: **Настройки → Update** (or auto).
 
 ### Fix
-- Pipeline \`AUTO_HEAL\`: helper timeout / verify lag while L0 green → \`ok=1 soft=1\` (no false ✕ / Safe Mode tick)
-- Shared \`AutoDoctor.isSoftHealOK\` (wake path uses the same)
-
-### Note
-Checksum asset \`myVPN.app.zip.sha256\` included (0.5.9+).
+- Failed public-IP probe no longer clears cached IP → fewer false «нет интернета» DROPs (\`EGRESS_PROBE empty keep_cached\`)
+- Cooldown skip logs: \`last_primary\` / \`last_kind\` / \`new=\`
+- New DROP with **different** PRIMARY can bypass restart cooldown (\`HEAL_GATE cooldown_bypass=new_primary\`)
+- \`AUTO_DOCTOR\` timeout + L0 green → \`ok=1 soft=1\` (no false ✕)
 EOF
 )" \
   --latest

@@ -1177,6 +1177,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 if !includePublicIP, next.ip.isEmpty {
                     next.ip = self.snapshot.ip
+                } else if includePublicIP, next.ip.isEmpty, !self.snapshot.ip.isEmpty, next.tun {
+                    // Failed ifconfig.me must not look like egress DROP (0.5.11).
+                    DropLogger.logEvent("EGRESS_PROBE empty keep_cached=\(self.snapshot.ip)")
+                    next.ip = self.snapshot.ip
                 }
                 let changed = self.snapshot != next
                 self.snapshot = next

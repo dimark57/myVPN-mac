@@ -7,6 +7,7 @@ enum AutoDoctor {
     private static let healKey = "local.myvpn.mac.autoHeal"
     private static let lastHealKey = "local.myvpn.mac.autoHeal.last"
     private static let lastHealKindKey = "local.myvpn.mac.autoHeal.lastKind"
+    private static let lastHealPrimaryKey = "local.myvpn.mac.autoHeal.lastPrimary"
     private static let lastRestartHealKey = "local.myvpn.mac.autoHeal.lastRestart"
     private static let healTimesKey = "local.myvpn.mac.autoHeal.times"
 
@@ -132,6 +133,7 @@ enum AutoDoctor {
     }
 
     /// TUN_DOWN→up when desiredOn bypasses shared restart cooldown (doc-10).
+    /// New DROP with a *different* PRIMARY may bypass restart cooldown once (0.5.11).
     static func canHealNow(primary: String = "", kind: HealKind = .none(reason: "")) -> (ok: Bool, reason: String?) {
         if !DesiredStateStore.desiredOn {
             return (false, "desired_off")
@@ -143,24 +145,40 @@ enum AutoDoctor {
         }
         let breaker = HealCircuitBreaker.canAttemptHeal()
         guard breaker.ok else {
-            return (false, breaker.reason)
+            return (false, "safe_mode reason=\(breaker.reason ?? "open")")
         }
 
         let now = Date().timeIntervalSince1970
         let followUp = isFollowUpHeal(primary: primary, kind: kind)
         let tunUpExempt = (kind == .up && primary == "TUN_DOWN" && DesiredStateStore.desiredOn)
+        let lastPrimary = UserDefaults.standard.string(forKey: lastHealPrimaryKey) ?? ""
+        let lastKind = UserDefaults.standard.string(forKey: lastHealKindKey) ?? ""
 
         if !followUp, !tunUpExempt, isRestartKind(kind) {
             let lastRestart = UserDefaults.standard.double(forKey: lastRestartHealKey)
             if lastRestart > 0, now - lastRestart < cooldownSeconds {
                 let left = Int(cooldownSeconds - (now - lastRestart))
-                return (false, "cooldown \(left)с")
+                // Different PRIMARY after a new DROP — allow one restart (cascade morning bug).
+                if !primary.isEmpty, !lastPrimary.isEmpty, primary != lastPrimary {
+                    DropLogger.logEvent(
+                        "HEAL_GATE cooldown_bypass=new_primary last=\(lastPrimary) new=\(primary) left_would=\(left)с"
+                    )
+                    // fall through
+                } else {
+                    return (
+                        false,
+                        "cooldown \(left)с block=restart last_primary=\(lastPrimary.isEmpty ? "?" : lastPrimary) last_kind=\(lastKind.isEmpty ? "?" : lastKind) new=\(primary.isEmpty ? "?" : primary)"
+                    )
+                }
             }
         } else if !followUp, !tunUpExempt, !isRestartKind(kind), kind != .up {
             let last = UserDefaults.standard.double(forKey: lastHealKey)
             if last > 0, now - last < cooldownSeconds {
                 let left = Int(cooldownSeconds - (now - last))
-                return (false, "cooldown \(left)с")
+                return (
+                    false,
+                    "cooldown \(left)с block=soft last_kind=\(lastKind.isEmpty ? "?" : lastKind) new=\(primary.isEmpty ? "?" : primary)"
+                )
             }
         }
 
@@ -180,6 +198,9 @@ enum AutoDoctor {
         let now = Date().timeIntervalSince1970
         UserDefaults.standard.set(now, forKey: lastHealKey)
         UserDefaults.standard.set(kindLabel(kind), forKey: lastHealKindKey)
+        if !primary.isEmpty {
+            UserDefaults.standard.set(primary, forKey: lastHealPrimaryKey)
+        }
         if isRestartKind(kind) {
             UserDefaults.standard.set(now, forKey: lastRestartHealKey)
         }

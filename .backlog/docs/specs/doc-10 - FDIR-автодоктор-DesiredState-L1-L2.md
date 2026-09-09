@@ -3,7 +3,7 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.10'
+target_version: '0.5.11'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
@@ -15,6 +15,7 @@ target_version: '0.5.10'
 **0.5.8** = single-instance UI (`SingleInstance`): один `NSStatusItem` на `local.myvpn.mac`; `~/Applications` бьёт DerivedData; update terminate peers before relaunch; `UI_LAUNCH`/`UI_UPDATE` в drops; release/build не `open` stage.
 **0.5.9** = observability: `UI_CMD` в drops; helper `forbidden peer_uid=`; doctor `helper_proto`; update SHA-256 sidecar + verify before install.
 **0.5.10** = pipeline `AUTO_HEAL` soft-success (`AutoDoctor.isSoftHealOK`): helper timeout / verify lag при зелёном L0 → `ok=1 soft=1`, без ✕ / Safe Mode; wake использует тот же helper.
+**0.5.11** = cooldown vs DROP: детальный `skip=cooldown … last_primary=`; bypass при *новом* PRIMARY; `EGRESS_PROBE empty keep_cached`; `AUTO_DOCTOR ok=1 soft=1` при timeout + L0 green.
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 
