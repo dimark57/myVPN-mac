@@ -82,10 +82,15 @@ done
 /usr/bin/grep -q 'UI_MOUNT soft=1' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI_MOUNT soft timeout" || bad "UI_MOUNT soft timeout"
 /usr/bin/grep -q 'Rebuild even while busy' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "menu rebuild while busy" || bad "menu rebuild while busy"
 
-# --- Cooldown / egress 0.5.11 ---
+# --- Cooldown / egress 0.5.11 + streak clear 0.5.17 ---
 /usr/bin/grep -q 'cooldown_bypass=new_primary' "${ROOT}/macos/MyVPN/MyVPN/AutoDoctor.swift" && pass "cooldown bypass new_primary" || bad "cooldown bypass new_primary"
 /usr/bin/grep -q 'last_primary=' "${ROOT}/macos/MyVPN/MyVPN/AutoDoctor.swift" && pass "cooldown last_primary in reason" || bad "cooldown last_primary in reason"
 /usr/bin/grep -q 'EGRESS_PROBE empty keep_cached' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "EGRESS_PROBE keep_cached" || bad "EGRESS_PROBE keep_cached"
+/usr/bin/grep -q 'EGRESS_PROBE empty clear_cached' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "EGRESS_PROBE clear_cached streak" || bad "EGRESS_PROBE clear_cached streak"
+/usr/bin/grep -q 'egressEmptyClearAfter' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "egressEmptyClearAfter" || bad "egressEmptyClearAfter"
+/usr/bin/grep -q 'DesiredStateStore.desiredOn' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "egress probe faster when desiredOn" || bad "egress probe faster when desiredOn"
+/usr/bin/grep -q 'maxHealsPerHour = 6' "${ROOT}/macos/MyVPN/MyVPN/AutoDoctor.swift" && pass "maxHealsPerHour 6" || bad "maxHealsPerHour 6"
+/usr/bin/grep -q 'egress' "${ROOT}/macos/MyVPN/MyVPN/DropLogger.swift" && pass "DropLogger DIFF egress" || bad "DropLogger DIFF egress"
 /usr/bin/grep -q 'AUTO_DOCTOR ok=1 soft=1' "${ROOT}/macos/MyVPN/MyVPN/AutoDoctorPipeline.swift" && pass "AUTO_DOCTOR soft timeout" || bad "AUTO_DOCTOR soft timeout"
 
 # --- Soft-success 0.5.10 ---

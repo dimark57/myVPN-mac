@@ -2,7 +2,7 @@ import Foundation
 
 /// Background health DIFF logger + AUTO_* journal (doc-10 FDIR).
 /// Uses: StatusSnapshot, DoctorStatus, AutoDoctor, DesiredStateStore, IncidentStore.
-/// Hard DROP only on tun/nas; ICMP peer flaps stay FLAP-only.
+/// Hard DROP: tun/nas + egress (pub-IP cleared after streak, 0.5.17). ICMP peer flaps stay FLAP-only.
 enum DropLogger {
     static var logURL: URL {
         URL(fileURLWithPath: DoctorStatus.cacheDir + "/drops.log")
@@ -236,6 +236,7 @@ enum DropLogger {
         if prev.home != cur.home { diffs.append("home \(prev.home ? 1 : 0)→\(cur.home ? 1 : 0)") }
         if prev.macbook != cur.macbook { diffs.append("macbook \(prev.macbook ? 1 : 0)→\(cur.macbook ? 1 : 0)") }
         if prev.nas != cur.nas { diffs.append("nas \(prev.nas ? 1 : 0)→\(cur.nas ? 1 : 0)") }
+        if prev.egress != cur.egress { diffs.append("egress \(prev.egress ? 1 : 0)→\(cur.egress ? 1 : 0)") }
         guard !diffs.isEmpty else { return }
 
         let channels = diffs.compactMap { $0.split(separator: " ").first.map(String.init) }.sorted().joined(separator: ",")

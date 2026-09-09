@@ -32,7 +32,8 @@ enum AutoDoctor {
 
     static let cooldownSeconds: TimeInterval = 300
     static let followUpWindowSeconds: TimeInterval = 120
-    static let maxHealsPerHour = 3
+    /// Zombie UDP can recur ~10–15 мин на Batt — 3/ч мало (0.5.17).
+    static let maxHealsPerHour = 6
     static let dropConfirmNeeded = 2
     /// Wall-clock between first CONFIRM and DROP_CONFIRMED (doc-10).
     static let dropConfirmMinSeconds: TimeInterval = 20

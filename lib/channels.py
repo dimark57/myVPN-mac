@@ -63,7 +63,7 @@ def conf_template(address: str = "10.0.0.2/32") -> str:
         "PublicKey =\n"
         "Endpoint = 203.0.113.10:51820\n"
         "AllowedIPs = 0.0.0.0/0\n"
-        "PersistentKeepalive = 25\n"
+        "PersistentKeepalive = 15\n"
     )
 
 

@@ -45,7 +45,7 @@ def _endpoint_from_conf(tag: str, conf: dict) -> dict:
             "port": peer["port"],
             "public_key": peer["public_key"],
             "allowed_ips": ["0.0.0.0/0"],
-            "persistent_keepalive_interval": peer.get("persistent_keepalive_interval", 25),
+            "persistent_keepalive_interval": peer.get("persistent_keepalive_interval", 15),
         }],
     }
     if "mtu" in conf:
@@ -131,7 +131,7 @@ def build_config(
                 route_rules.append({"rule_set": tag, "outbound": via})
 
     return {
-        "log": {"level": "info", "timestamp": True},
+        "log": {"level": "warn", "timestamp": True},
         "dns": {
             "servers": dns_servers,
             "rules": dns_rules,

@@ -58,7 +58,7 @@ enum WireGuardProfileStore {
         PublicKey =
         Endpoint = 203.0.113.10:51820
         AllowedIPs = 0.0.0.0/0
-        PersistentKeepalive = 25
+        PersistentKeepalive = 15
         """
     }
 

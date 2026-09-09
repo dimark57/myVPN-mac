@@ -32,6 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var autoDoctorInFlight = false
     private var sessionCid = "sess_" + String(UUID().uuidString.prefix(8))
     private var egressPollCounter = 0
+    /// Consecutive failed pub-IP probes while tun up (0.5.17). Uses: DropLogger hard egress edge.
+    private var egressEmptyStreak = 0
+    /// Clear keep_cached after this many empties → CONFIRM → MACBOOK_EGRESS_DOWN heal.
+    private static let egressEmptyClearAfter = 2
     private var wakeObserver: NSObjectProtocol?
 
     private var isBusy: Bool { busyKey != nil }
@@ -89,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerWakeHandler()
 
         // Fallback poll: 2s while menu open (live NAS/VPN badge), 15s otherwise (0.5.12).
+        // VPN on + menu closed: pub-IP every status tick (~16s) so zombie UDP hits heal (0.5.17).
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.egressPollCounter += 1
@@ -96,9 +101,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // While menu closed: every ~7.5th tick ≈ 15s. While open: every tick.
             if !open, self.egressPollCounter % 8 != 0 { return }
             // Allow refresh during mount/up so sticky rows show live badge (was blocked).
-            let wantIP = open
-                ? (self.egressPollCounter % 15 == 0)
-                : (self.egressPollCounter % 32 == 0)
+            let wantIP: Bool
+            if open {
+                wantIP = self.egressPollCounter % 15 == 0
+            } else if DesiredStateStore.desiredOn {
+                wantIP = true
+            } else {
+                wantIP = self.egressPollCounter % 32 == 0
+            }
             self.refreshStatus(includePublicIP: wantIP)
             if !open || self.egressPollCounter % 8 == 0 {
                 self.refreshPrefs()
@@ -1234,9 +1244,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if !includePublicIP, next.ip.isEmpty {
                     next.ip = self.snapshot.ip
                 } else if includePublicIP, next.ip.isEmpty, !self.snapshot.ip.isEmpty, next.tun {
-                    // Failed ifconfig.me must not look like egress DROP (0.5.11).
-                    DropLogger.logEvent("EGRESS_PROBE empty keep_cached=\(self.snapshot.ip)")
-                    next.ip = self.snapshot.ip
+                    // 0.5.11: one failed ifconfig.me ≠ DROP. 0.5.17: N empties → clear → hard egress.
+                    self.egressEmptyStreak += 1
+                    let need = Self.egressEmptyClearAfter
+                    if self.egressEmptyStreak < need {
+                        DropLogger.logEvent(
+                            "EGRESS_PROBE empty keep_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)/\(need)"
+                        )
+                        next.ip = self.snapshot.ip
+                    } else {
+                        DropLogger.logEvent(
+                            "EGRESS_PROBE empty clear_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)"
+                        )
+                        self.egressEmptyStreak = 0
+                        // leave next.ip empty → DropLogger Sample.egress false → hardDrop
+                    }
+                } else if includePublicIP, !next.ip.isEmpty {
+                    self.egressEmptyStreak = 0
                 }
                 let changed = self.snapshot != next
                 self.snapshot = next

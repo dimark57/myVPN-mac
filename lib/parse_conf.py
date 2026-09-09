@@ -78,7 +78,7 @@ def parse_conf(path: Path) -> dict[str, Any]:
             norm_addrs.append(f"{a}/32")
 
     mtu = int(interface["MTU"]) if "MTU" in interface else None
-    keepalive = int(peer0["PersistentKeepalive"]) if "PersistentKeepalive" in peer0 else 25
+    keepalive = int(peer0["PersistentKeepalive"]) if "PersistentKeepalive" in peer0 else 15
 
     allowed = []
     if "AllowedIPs" in peer0:

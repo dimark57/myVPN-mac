@@ -3,7 +3,7 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.16'
+target_version: '0.5.17'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
@@ -21,6 +21,7 @@ target_version: '0.5.16'
 **0.5.14** = UI «Перемонтировать» = `--remount` (unmount→mount, не `--safe` BUSY abort); mount SoT = mount table; soft umount then force.
 **0.5.15** = полный `UI_CMD` на все клики (settings/send-report/quit/hotkey/autostart/…); диагноз «что нажали» = `drops.log`.
 **0.5.16** = doctor soft: `runtime_local` на NAS = WARN (не FAIL); `autostart` off = INFO (preference); флаги не шумят HEALTHY.
+**0.5.17** = egress zombie heal: `EGRESS_PROBE` keep_cached только streak&lt;2, затем `clear_cached` → hard DROP → `MACBOOK_EGRESS_DOWN` down→up; pub-IP ~16с при desiredOn; DIFF `egress`; keepalive default 15; sing-box log `warn`; `maxHealsPerHour=6`.
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 
