@@ -205,7 +205,13 @@ enum AutoDoctor {
             Thread.sleep(forTimeInterval: 1.0)
             try MyVPNCLI.up()
             Thread.sleep(forTimeInterval: 1.5)
-            try? MyVPNCLI.mountNAS(force: false, safe: true)
+            // Surface mount errors in drops (was try? silent — wake 0.5.5 false "ok").
+            do {
+                try MyVPNCLI.mountNAS(force: false, safe: true)
+                DropLogger.logEvent("HEAL_NAS ok=1")
+            } catch {
+                DropLogger.logEvent("HEAL_NAS ok=0 err=\(error.localizedDescription)")
+            }
         case .mountNAS:
             try MyVPNCLI.mountNAS(force: false, safe: true)
         case .flushDNS:

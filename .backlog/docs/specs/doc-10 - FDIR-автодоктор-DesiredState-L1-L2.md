@@ -3,14 +3,14 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.4'
+target_version: '0.5.6'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
 
 Связано: **DRAFT-2**, **doc-9 — Автодоктор: таксономия отвалов и heal**, **doc-4**, `DropLogger.swift`, `AutoDoctor.swift`, `lib/doctor.zsh`.  
-Цель релиза: **0.5.4** (wake channel-first). Dual-WG / `render_config` / NE (doc-5) — **не трогать**.
-Первичный FDIR ship был **0.5.0**; 0.5.1–0.5.3 = INTENTIONAL_OFF + wake soft-recover + helper osascript; **0.5.4** = wake: канал → потом NAS.
+Цель релиза: **0.5.6** (wake always remount NAS). Dual-WG / `render_config` / NE (doc-5) — **не трогать**.
+Первичный FDIR ship был **0.5.0**; 0.5.4 = channel-first; **0.5.6** = remount NAS даже при L0 `nas=1` (stale SMB).
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 
@@ -59,7 +59,7 @@ PRIMARY / событие: `INTENTIONAL_OFF` (или journal `skip=desired_off`).
 В grace: Detect+L0 можно писать FLAP/DIFF; **pipeline heal skip=`grace`** (restart/`TUN_DOWN→up` через DropLogger).  
 **Carve-out 0.5.1+:** `WakeRecover` после `didWake` **может** heal/pin/mount во время grace; DropLogger→pipeline restart по-прежнему `skip=grace`.
 
-Wake (**0.5.4** channel-first): settle **10s** → L0 → при `tun` + (ip пуст **или** `!macbook`) — PRIMARY `SLEEP_WAKE_STALE` → один `down→up` → pin только если restart не делали → **`mount-nas --safe` только если** `tun && (home||macbook)`; иначе `WAKE_NAS skip=no_channel`.
+Wake (**0.5.6**): settle **10s** → L0 → при `tun` + (ip пуст **или** `!macbook`) — `SLEEP_WAKE_STALE` → `down→up` → pin если не restart → при `tun && (home||macbook)` — **всегда** `mount-nas --safe` (даже если L0 `nas=1` — stale ghost); иначе `WAKE_NAS skip=no_channel`. `HEAL_NAS` логируется (не silent `try?`).
 Не: disconnect-on-sleep; не: kill на каждый wake; не: NAS до проверки канала.
 
 ## 5. ICMP peer ≠ DROP_CONFIRMED

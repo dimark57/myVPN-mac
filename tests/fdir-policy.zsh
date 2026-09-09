@@ -31,9 +31,9 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.5 ---
+# --- Info.plist 0.5.6 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.5" ]] && pass "version $ver" || bad "version want 0.5.5 got $ver"
+[[ "$ver" == "0.5.6" ]] && pass "version $ver" || bad "version want 0.5.6 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
@@ -46,11 +46,11 @@ for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoD
   [[ -f "${ROOT}/macos/MyVPN/MyVPN/${f}.swift" ]] && pass "swift $f" || bad "missing $f.swift"
 done
 
-# --- WakeRecover 0.5.4 channel-first: heal before NAS, skip=no_channel ---
+# --- WakeRecover 0.5.6: always remount when channel live ---
 WR="${ROOT}/macos/MyVPN/MyVPN/WakeRecover.swift"
 /usr/bin/grep -q 'WAKE_NAS skip=no_channel' "${WR}" && pass "WakeRecover skip=no_channel" || bad "WakeRecover skip=no_channel"
+/usr/bin/grep -q 'remount_stale_ok' "${WR}" && pass "WakeRecover remount_stale_ok" || bad "WakeRecover remount_stale_ok"
 /usr/bin/grep -q 'performWakeHeal\|SLEEP_WAKE_STALE' "${WR}" && pass "WakeRecover SLEEP_WAKE_STALE" || bad "WakeRecover SLEEP_WAKE_STALE"
-# Order: WAKE_HEAL / performWakeHeal appears before WAKE_NAS mount in source
 heal_line="$(/usr/bin/grep -n 'performWakeHeal\|WAKE_HEAL primary' "${WR}" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
 nas_line="$(/usr/bin/grep -n 'WAKE_NAS mount-nas' "${WR}" | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
 if [[ -n "$heal_line" && -n "$nas_line" && "$heal_line" -lt "$nas_line" ]]; then
@@ -58,6 +58,15 @@ if [[ -n "$heal_line" && -n "$nas_line" && "$heal_line" -lt "$nas_line" ]]; then
 else
   bad "WakeRecover heal-before-NAS order heal=$heal_line nas=$nas_line"
 fi
+# Must NOT gate mount on !snap.nas only
+if /usr/bin/grep -q 'if wantNAS, !snap.nas' "${WR}"; then
+  bad "WakeRecover still skips when nas=1"
+else
+  pass "WakeRecover does not skip on nas=1"
+fi
+
+# --- HEAL_NAS logged (not silent try?) ---
+/usr/bin/grep -q 'HEAL_NAS' "${ROOT}/macos/MyVPN/MyVPN/AutoDoctor.swift" && pass "HEAL_NAS log" || bad "HEAL_NAS log"
 
 # --- helper accepts pin-endpoints ---
 /usr/bin/grep -q 'pin-endpoints' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper pin-endpoints" || bad "helper pin-endpoints"
@@ -65,7 +74,7 @@ fi
 # --- INTENTIONAL_OFF in doctor ---
 /usr/bin/grep -q 'INTENTIONAL_OFF' "${ROOT}/lib/doctor.zsh" && pass "doctor INTENTIONAL_OFF" || bad "doctor INTENTIONAL_OFF"
 
-# --- UI timeouts 0.5.4 ---
+# --- UI timeouts ---
 AD="${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift"
 /usr/bin/grep -q 'timeout: 25' "${AD}" && pass "doctor UI timeout 25" || bad "doctor UI timeout 25"
 /usr/bin/grep -q 'timeout: 35' "${AD}" && pass "up/down UI timeout 35" || bad "up/down UI timeout 35"

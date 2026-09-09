@@ -1,8 +1,9 @@
 import Foundation
 
-/// Soft recover after `NSWorkspace.didWake` (doc-10 / 0.5.4).
+/// Soft recover after `NSWorkspace.didWake` (doc-10 / 0.5.6).
 /// Uses: DesiredStateStore, AutoDoctor, MyVPNCLI, DropLogger, FlightRecorder, StatusSnapshot.
-/// Channel-first: L0 → SLEEP_WAKE_STALE restart if needed → pin (if no restart) → NAS only if channel live.
+/// Channel-first: L0 → SLEEP_WAKE_STALE restart if needed → pin (if no restart) → NAS remount if channel live
+/// (always remount — L0 nas=1 can be stale SMB; do not skip when probe says mounted).
 /// Grace still blocks DropLogger→pipeline restart-heal; this path bypasses that for wake.
 enum WakeRecover {
     static let queue = DispatchQueue(label: "local.myvpn.mac.wake-recover", qos: .utility)
@@ -82,14 +83,15 @@ enum WakeRecover {
                 }
             }
 
-            // NAS only when channel is alive — no share probe on dead tunnel.
+            // NAS when channel alive — always remount (0.5.6): L0 nas=1 can be stale SMB ghost.
             let channelLive = snap.tun && (snap.home || snap.macbook)
             let wantNAS = MyVPNCLI.autoNASEnabled() || AutoDoctor.autoHealEnabled
-            if wantNAS, !snap.nas {
+            if wantNAS {
                 if !channelLive {
                     DropLogger.logEvent("WAKE_NAS skip=no_channel")
                 } else {
-                    DropLogger.logEvent("WAKE_NAS mount-nas --safe")
+                    let reason = snap.nas ? "remount_stale_ok" : "missing"
+                    DropLogger.logEvent("WAKE_NAS mount-nas --safe reason=\(reason)")
                     DispatchQueue.main.async {
                         callbacks.onNotify(
                             "myVPN · После сна",
@@ -107,6 +109,12 @@ enum WakeRecover {
                                 callbacks.onNotify(
                                     "myVPN ✓ NAS",
                                     "Смонтирован после wake · \(DoctorStatus.nowStamp())",
+                                    "wake-nas"
+                                )
+                            } else {
+                                callbacks.onNotify(
+                                    "myVPN · NAS после сна",
+                                    "mount выполнен, том ещё не виден · \(DoctorStatus.nowStamp())",
                                     "wake-nas"
                                 )
                             }
