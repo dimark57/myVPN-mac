@@ -41,15 +41,14 @@ gh release create "${TAG}" "${ZIP}" "${SHA}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
   --notes "$(cat <<EOF
-## myVPN ${VERSION} — cooldown vs DROP clarity
+## myVPN ${VERSION} — live menu status
 
 In-app: **Настройки → Update** (or auto).
 
 ### Fix
-- Failed public-IP probe no longer clears cached IP → fewer false «нет интернета» DROPs (\`EGRESS_PROBE empty keep_cached\`)
-- Cooldown skip logs: \`last_primary\` / \`last_kind\` / \`new=\`
-- New DROP with **different** PRIMARY can bypass restart cooldown (\`HEAL_GATE cooldown_bypass=new_primary\`)
-- \`AUTO_DOCTOR\` timeout + L0 green → \`ok=1 soft=1\` (no false ✕)
+- NAS status SoT = \`/sbin/mount\` table (no hanging SMB \`fileExists\`)
+- Menu refreshes every ~2s while open; rebuilds during mount/up busy
+- Mount UI timeout + volume already live → soft success (\`UI_MOUNT soft=1\`), not ✕
 EOF
 )" \
   --latest

@@ -83,14 +83,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startGlobalHotkeys()
         registerWakeHandler()
 
-        // Fallback only — primary updates: menu open + pid-file watcher (Alfred gv / CLI).
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            guard let self, !self.isBusy else { return }
-            // Every 4th tick (~60s): egress probe for hard DROP (doc-10).
+        // Fallback poll: 2s while menu open (live NAS/VPN badge), 15s otherwise (0.5.12).
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
             self.egressPollCounter += 1
-            let wantIP = self.egressPollCounter % 4 == 0
+            let open = self.menuIsOpen
+            // While menu closed: every ~7.5th tick ≈ 15s. While open: every tick.
+            if !open, self.egressPollCounter % 8 != 0 { return }
+            // Allow refresh during mount/up so sticky rows show live badge (was blocked).
+            let wantIP = open
+                ? (self.egressPollCounter % 15 == 0)
+                : (self.egressPollCounter % 32 == 0)
             self.refreshStatus(includePublicIP: wantIP)
-            self.refreshPrefs()
+            if !open || self.egressPollCounter % 8 == 0 {
+                self.refreshPrefs()
+            }
         }
         if let refreshTimer {
             RunLoop.main.add(refreshTimer, forMode: .common)
@@ -161,10 +168,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.highlight(true)
         // Do NOT rebuildMenu here: with manual popUp, removeAllItems during open
         // leaves NSMenu scrolled (top ^ caret + first rows clipped).
-        if !isBusy {
-            // Async refresh; rebuild only if snapshot actually changes.
-            refreshStatus(includePublicIP: true)
-        }
+        // Refresh even while busy — live NAS/VPN badge (0.5.12).
+        refreshStatus(includePublicIP: true)
         startMouseExitMonitor()
     }
 
@@ -339,13 +344,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // NAS — global ⌃⌥⌘N
         let nasDetail: String = {
             switch busyKey {
-            case "mount-nas", "auto-nas": return "…"
+            case "mount-nas", "auto-nas":
+                return snapshot.nas ? "смонтирован" : "…"
             case "up", "auto-up": return autoNASOn ? "ожидание…" : snapshot.nasBadge
             default: return snapshot.nasBadge
             }
         }()
         if busyKey == "mount-nas" || busyKey == "auto-nas" {
-            slots.append(.sticky(key: busyKey!, title: "Монтирую NAS…", enabled: false, detail: nasDetail, checked: nil, action: {}))
+            let title = snapshot.nas ? "NAS уже смонтирован…" : "Монтирую NAS…"
+            slots.append(.sticky(key: busyKey!, title: title, enabled: false, detail: nasDetail, checked: nil, action: {}))
         } else {
             slots.append(.sticky(
                 key: "mount-nas",
@@ -563,7 +570,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var nasHeaderTitle: String {
         switch busyKey {
-        case "mount-nas", "auto-nas": return "NAS: монтирую…"
+        case "mount-nas", "auto-nas":
+            return snapshot.nas ? "NAS: смонтирован" : "NAS: монтирую…"
         case "up", "auto-up": return autoNASOn ? "NAS: ожидание…" : snapshot.nasLine
         default: return snapshot.nasLine
         }
@@ -1044,6 +1052,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let watchdogKey = key
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
             guard let self, self.busyKey == watchdogKey else { return }
+            // Mount UI timeout: if volume already live, soft-ok (CLI may still be waiting on alive).
+            if watchdogKey == "mount-nas" || watchdogKey == "auto-nas" {
+                let live = MyVPNCLI.status(includePublicIP: false)
+                if live.nas {
+                    self.busyKey = nil
+                    self.snapshot = live
+                    DropLogger.logEvent("UI_MOUNT soft=1 timeout=\(Int(timeout))с nas=1")
+                    self.notify(
+                        title: "myVPN ✓ NAS",
+                        body: "Смонтирован · \(DoctorStatus.nowStamp())",
+                        replacing: key
+                    )
+                    if self.menuIsOpen { self.rebuildMenu() }
+                    self.applyIcon()
+                    return
+                }
+            }
             self.busyKey = nil
             let name = Self.busyLabel(watchdogKey)
             self.notify(
@@ -1189,8 +1214,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.handleChannelDrop(drop)
                 }
                 self.applyIcon()
-                if self.menuIsOpen, !self.isBusy, changed {
-                    self.rules = RulesStatus.load()
+                // Rebuild even while busy so «Монтирую…» / NAS badge track reality (0.5.12).
+                if self.menuIsOpen, changed {
+                    if !self.isBusy {
+                        self.rules = RulesStatus.load()
+                    }
                     self.rebuildMenu()
                 }
             }

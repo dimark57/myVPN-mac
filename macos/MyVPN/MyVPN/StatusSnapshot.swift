@@ -55,7 +55,8 @@ struct StatusSnapshot: Equatable, Sendable {
         nas ? "смонтирован" : "нет"
     }
 
-    /// Live probe without spawning `myvpn` (uses: pid file, probes.json, /sbin/ping, mount dir, curl).
+    /// Live probe without spawning `myvpn` (uses: pid file, probes.json, /sbin/ping, mount table, curl).
+    /// NAS check is timed (0.5.12): never block workQueue on stale SMB `fileExists`.
     static func probe(includePublicIP: Bool) -> StatusSnapshot {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let pidFile = home + "/.config/myvpn/sing-box.pid"
@@ -65,14 +66,11 @@ struct StatusSnapshot: Equatable, Sendable {
         let macPing = hints.macbookPing.isEmpty ? "10.8.0.1" : hints.macbookPing
         var s = StatusSnapshot()
         s.tun = pidAlive(pidFile)
-        s.nas = FileManager.default.fileExists(atPath: nasMount + "/Project")
-            || FileManager.default.fileExists(atPath: nasMount + "/data")
-            || (FileManager.default.fileExists(atPath: nasMount)
-                && (try? FileManager.default.contentsOfDirectory(atPath: nasMount))?.isEmpty == false)
 
         let group = DispatchGroup()
         var homeOK = false
         var macOK = false
+        var nasOK = false
         var pub = ""
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
@@ -82,6 +80,11 @@ struct StatusSnapshot: Equatable, Sendable {
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
             macOK = ping(macPing)
+            group.leave()
+        }
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            nasOK = nasMounted(at: nasMount)
             group.leave()
         }
         if includePublicIP {
@@ -94,8 +97,65 @@ struct StatusSnapshot: Equatable, Sendable {
         _ = group.wait(timeout: .now() + 2.5)
         s.home = homeOK
         s.macbook = macOK
+        s.nas = nasOK
         s.ip = pub
         return s
+    }
+
+    /// Menu SoT for NAS: mount table wins (matches Finder). Path listdir is best-effort ≤1.2s.
+    static func nasMounted(at mount: String) -> Bool {
+        if nasInMountTable(mount) {
+            return true
+        }
+        return nasPathsReadable(mount, timeout: 1.2)
+    }
+
+    private static func nasInMountTable(_ mount: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/sbin/mount")
+        p.arguments = []
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        do {
+            try p.run()
+            let box = p
+            let wait = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .utility).async {
+                box.waitUntilExit()
+                wait.signal()
+            }
+            if wait.wait(timeout: .now() + 0.8) == .timedOut {
+                p.terminate()
+                return false
+            }
+        } catch {
+            return false
+        }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let needle = " on \(mount) "
+        return text.contains(needle) || text.contains(" on \(mount)\n")
+    }
+
+    private static func nasPathsReadable(_ mount: String, timeout: TimeInterval) -> Bool {
+        let box = DispatchSemaphore(value: 0)
+        var ok = false
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: mount + "/Project") || fm.fileExists(atPath: mount + "/data") {
+                ok = true
+            } else if fm.fileExists(atPath: mount),
+                      let kids = try? fm.contentsOfDirectory(atPath: mount),
+                      !kids.isEmpty {
+                ok = true
+            }
+            box.signal()
+        }
+        if box.wait(timeout: .now() + timeout) == .timedOut {
+            return false
+        }
+        return ok
     }
 
     private static func pidAlive(_ path: String) -> Bool {
