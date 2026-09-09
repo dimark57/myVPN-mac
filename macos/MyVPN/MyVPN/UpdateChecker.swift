@@ -1,11 +1,13 @@
 import AppKit
+import CryptoKit
 import Foundation
 
 /// GitHub Releases updater for ~/Applications/myVPN.app
-/// Uses: api.github.com/repos/dimark57/myVPN-mac/releases/latest
+/// Uses: api.github.com/repos/dimark57/myVPN-mac/releases/latest, DropLogger, SingleInstance
 enum UpdateChecker {
     static let repo = "dimark57/myVPN-mac"
     static let assetName = "myVPN.app.zip"
+    static let checksumAssetName = "myVPN.app.zip.sha256"
 
     private static let autoCheckKey = "local.myvpn.mac.update.autoCheck"
     private static let autoInstallKey = "local.myvpn.mac.update.autoInstall"
@@ -35,6 +37,8 @@ enum UpdateChecker {
         var latest: String?
         var releaseURL: URL?
         var assetURL: URL?
+        /// Lowercase hex SHA-256 of zip (from sidecar or GitHub digest). Nil = not published.
+        var sha256: String?
         var upToDate: Bool
         var message: String
     }
@@ -69,46 +73,55 @@ enum UpdateChecker {
                     latest: nil,
                     releaseURL: URL(string: "https://github.com/\(repo)/releases"),
                     assetURL: nil,
+                    sha256: nil,
                     upToDate: true,
                     message: "v\(current) · релизов на GitHub пока нет"
                 )
             }
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, upToDate: true,
+                return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, sha256: nil, upToDate: true,
                              message: "Не удалось проверить обновления")
             }
             guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, upToDate: true,
+                return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, sha256: nil, upToDate: true,
                              message: "Неверный ответ GitHub")
             }
             let tag = ((obj["tag_name"] as? String) ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
             let html = obj["html_url"] as? String
             var asset: URL?
+            var shaURL: URL?
+            var digestSHA: String?
             if let assets = obj["assets"] as? [[String: Any]] {
                 for a in assets {
-                    if let name = a["name"] as? String, name == assetName,
-                       let u = a["browser_download_url"] as? String {
+                    guard let name = a["name"] as? String else { continue }
+                    if name == assetName, let u = a["browser_download_url"] as? String {
                         asset = URL(string: u)
-                        break
+                        digestSHA = normalizeSHA256(a["digest"] as? String)
+                    } else if name == checksumAssetName, let u = a["browser_download_url"] as? String {
+                        shaURL = URL(string: u)
                     }
                 }
+            }
+            var sha256 = digestSHA
+            if sha256 == nil, let shaURL {
+                sha256 = await fetchSidecarSHA256(shaURL)
             }
             let newer = isNewer(tag, than: current)
             if !newer {
                 return Result(current: current, latest: tag, releaseURL: html.flatMap(URL.init), assetURL: asset,
-                              upToDate: true, message: "v\(current) · обновлений нет")
+                              sha256: sha256, upToDate: true, message: "v\(current) · обновлений нет")
             }
             return Result(current: current, latest: tag, releaseURL: html.flatMap(URL.init), assetURL: asset,
-                          upToDate: false,
+                          sha256: sha256, upToDate: false,
                           message: "Доступна v\(tag) (сейчас v\(current))")
         } catch {
-            return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, upToDate: true,
+            return Result(current: current, latest: nil, releaseURL: nil, assetURL: nil, sha256: nil, upToDate: true,
                           message: "Ошибка сети: \(error.localizedDescription)")
         }
     }
 
-    /// Download zip, replace ~/Applications/myVPN.app, relaunch.
-    static func install(from assetURL: URL) async throws {
+    /// Download zip, verify SHA-256 when known, replace ~/Applications/myVPN.app, relaunch.
+    static func install(from assetURL: URL, expectedSHA256: String? = nil) async throws {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("myvpn-update-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmp) }
@@ -118,6 +131,19 @@ enum UpdateChecker {
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw UpdateError.downloadFailed
         }
+
+        let got = sha256Hex(bytes)
+        if let expected = expectedSHA256, !expected.isEmpty {
+            guard got == expected.lowercased() else {
+                DropLogger.logEvent("UI_UPDATE checksum_fail want=\(expected.prefix(12))… got=\(got.prefix(12))…")
+                throw UpdateError.checksumMismatch
+            }
+            DropLogger.logEvent("UI_UPDATE checksum_ok sha256=\(got.prefix(12))…")
+        } else {
+            // Pre-0.5.9 releases had no sidecar; still log for flight recorder.
+            DropLogger.logEvent("UI_UPDATE checksum_skip reason=no_digest sha256=\(got.prefix(12))…")
+        }
+
         try bytes.write(to: zipURL)
 
         let unzip = Process()
@@ -147,8 +173,6 @@ enum UpdateChecker {
         sign.waitUntilExit()
 
         // UI-only handoff (0.5.8): quit other menu-bar processes, then open new binary.
-        // Uses: SingleInstance (not helper/sing-box). Mirror macos/MyVPN/relaunch-ui.zsh peers-first.
-        // `-n` only after peers dead — needed so Launch Services loads disk binary while we still run.
         let killed = SingleInstance.terminatePeers(timeout: 2.0)
         DropLogger.logEvent("UI_UPDATE relaunch dest=\(dest.path) killed_peers=\(killed)")
 
@@ -173,13 +197,41 @@ enum UpdateChecker {
         return false
     }
 
+    private static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// `sha256:HEX` or bare hex → lowercase hex.
+    private static func normalizeSHA256(_ raw: String?) -> String? {
+        guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        if let r = s.range(of: "sha256:", options: .caseInsensitive) {
+            s = String(s[r.upperBound...])
+        }
+        s = s.lowercased()
+        guard s.count == 64, s.allSatisfy({ $0.isHexDigit }) else { return nil }
+        return s
+    }
+
+    private static func fetchSidecarSHA256(_ url: URL) async -> String? {
+        do {
+            let (data, resp) = try await URLSession.shared.data(from: url)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let text = String(data: data, encoding: .utf8) else { return nil }
+            let first = text.split(whereSeparator: { $0.isWhitespace || $0 == "\n" }).first.map(String.init)
+            return normalizeSHA256(first)
+        } catch {
+            return nil
+        }
+    }
+
     enum UpdateError: LocalizedError {
-        case downloadFailed, unzipFailed, missingApp
+        case downloadFailed, unzipFailed, missingApp, checksumMismatch
         var errorDescription: String? {
             switch self {
             case .downloadFailed: return "Не удалось скачать релиз"
             case .unzipFailed: return "Не удалось распаковать архив"
             case .missingApp: return "В архиве нет myVPN.app"
+            case .checksumMismatch: return "Контрольная сумма ZIP не совпала — установка отменена"
             }
         }
     }

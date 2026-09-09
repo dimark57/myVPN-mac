@@ -42,7 +42,10 @@ def send_command(cmd: str, timeout: float = 180.0) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="myVPN privileged helper client")
-    parser.add_argument("command", choices=("ping", "up", "down"))
+    parser.add_argument(
+        "command",
+        choices=("ping", "up", "down", "proto", "version", "pin-endpoints"),
+    )
     parser.add_argument("--timeout", type=float, default=180.0)
     args = parser.parse_args()
     return send_command(args.command, timeout=args.timeout)

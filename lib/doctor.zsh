@@ -98,6 +98,16 @@ myvpn_cmd_doctor() {
 
   if myvpn_helper_available; then
     _doc_check "helper" "1" "socket $(myvpn_helper_sock)"
+    # Running daemon protocol (0.5.9) — compare mentally to app requiredProtocol.
+    local helper_proto_out=""
+    helper_proto_out="$(/usr/bin/python3 "${MYVPN_LIB}/helper_client.py" proto 2>/dev/null || true)"
+    if [[ "${helper_proto_out}" == proto=* ]]; then
+      _doc_check "helper_proto" "1" "${helper_proto_out}"
+    elif [[ -n "${helper_proto_out}" ]]; then
+      _doc_check "helper_proto" "2" "unexpected: ${helper_proto_out}"
+    else
+      _doc_check "helper_proto" "2" "no reply (old helper?)"
+    fi
   else
     _doc_check "helper" "0" "no socket $(myvpn_helper_sock)"
     _doc_evidence "helper socket missing"

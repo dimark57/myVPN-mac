@@ -572,6 +572,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     private func turnOn() {
+        DropLogger.logEvent("UI_CMD on")
         DesiredStateStore.setDesiredOn()
         HealCircuitBreaker.resume(reason: "user_on")
         runCommand(key: "up", work: "Включаю VPN", timeout: 35) {
@@ -601,6 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func turnOff() {
+        DropLogger.logEvent("UI_CMD off")
         DesiredStateStore.setDesiredOff()
         runCommand(key: "down", work: "Выключаю VPN", timeout: 35) {
             try MyVPNCLI.down()
@@ -615,6 +617,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func mountNAS() {
+        DropLogger.logEvent("UI_CMD mount-nas")
         runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
             try MyVPNCLI.mountNAS(safe: true)
         } afterSuccess: { [weak self] in
@@ -693,6 +696,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctor() {
+        DropLogger.logEvent("UI_CMD doctor layer=L1")
         runCommand(key: "doctor", work: "Диагностика L1", timeout: 25, announceStart: false) {
             _ = try MyVPNCLI.doctor(deep: false)
         } afterSuccess: { [weak self] in
@@ -704,6 +708,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctorDeep() {
+        DropLogger.logEvent("UI_CMD doctor layer=L2")
         runCommand(key: "doctor", work: "Полная диагностика", timeout: AutoDoctor.l2DoctorTimeout, announceStart: true) {
             _ = try MyVPNCLI.doctor(deep: true)
         } afterSuccess: { [weak self] in
@@ -716,6 +721,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func checkUpdateFromMenu() {
         guard !updateInFlight, busyKey == nil else { return }
+        DropLogger.logEvent("UI_CMD update-check")
         busyKey = "check-update"
         rebuildMenu()
         applyIcon()
@@ -749,6 +755,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         return
                     }
                     self.updateInFlight = true
+                    DropLogger.logEvent("UI_CMD update-install v=\(result.latest ?? "?")")
                     self.notify(
                         title: "myVPN · Обновляю",
                         body: "Ставлю v\(result.latest ?? "?") · \(DoctorStatus.nowStamp())",
@@ -756,7 +763,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     )
                     Task {
                         do {
-                            try await UpdateChecker.install(from: url)
+                            try await UpdateChecker.install(from: url, expectedSHA256: result.sha256)
                         } catch {
                             await MainActor.run {
                                 self.updateInFlight = false
@@ -776,6 +783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func installHelper() {
+        DropLogger.logEvent("UI_CMD helper-install")
         runCommand(key: "helper-install", work: "Устанавливаю помощник…") {
             try MyVPNHelper.install()
             MyVPNHelper.clearDismissedUpgrade()
@@ -906,9 +914,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     replacing: "auto-update"
                 )
                 self.log("auto-update: installing v\(ver)")
+                DropLogger.logEvent("UI_CMD update-install auto=1 v=\(ver)")
                 Task {
                     do {
-                        try await UpdateChecker.install(from: url)
+                        try await UpdateChecker.install(from: url, expectedSHA256: result.sha256)
                     } catch {
                         await MainActor.run {
                             self.updateInFlight = false

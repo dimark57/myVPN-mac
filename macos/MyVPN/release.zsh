@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build myVPN.app.zip and publish GitHub Release (dimark57/myVPN-mac).
+# Build myVPN.app.zip (+ .sha256) and publish GitHub Release (dimark57/myVPN-mac).
 # Does NOT install to ~/Applications — users update via Releases / in-app Update.
 # Does NOT open stage / DerivedData myVPN.app (dual NSStatusItem — closed in 0.5.8).
 # Usage: macos/MyVPN/release.zsh [version]
@@ -30,28 +30,34 @@ print -r -- "Building myVPN ${VERSION} → stage (no ~/Applications install, no 
 
 ZIP="${STAGE}/myVPN.app.zip"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "${STAGE}/myVPN.app" "${ZIP}"
+SHA="${STAGE}/myVPN.app.zip.sha256"
+(
+  cd "${STAGE}"
+  /usr/bin/shasum -a 256 "myVPN.app.zip" | /usr/bin/awk '{print $1"  myVPN.app.zip"}' > "myVPN.app.zip.sha256"
+)
+print -r -- "sha256 $(/usr/bin/awk '{print $1}' "${SHA}")"
 
 TAG="v${VERSION}"
 print -r -- "Publishing ${TAG} → GitHub…"
-gh release create "${TAG}" "${ZIP}" \
+gh release create "${TAG}" "${ZIP}" "${SHA}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
   --notes "$(cat <<EOF
-## myVPN ${VERSION} — single-instance UI
+## myVPN ${VERSION} — observability
 
 In-app: **Настройки → Update → Проверить обновление**.
 
-### Fix
-- One menu-bar process for \`local.myvpn.mac\` (\`SingleInstance\`)
-- Preferred path \`~/Applications/myVPN.app\` beats DerivedData/stage
-- Update: terminate peer UIs before relaunch; VPN/helper untouched
-- \`UI_LAUNCH\` / \`UI_UPDATE\` in \`drops.log\`
+### What
+- \`UI_CMD\` in \`drops.log\` (on/off/mount/doctor/update/helper)
+- Helper logs \`forbidden peer_uid=\` on socket ACL deny
+- Doctor L1: \`helper_proto\` check
+- Update verifies \`myVPN.app.zip.sha256\` before install (mismatch → abort, no open)
 
-### Do not
-- Open \`DerivedData/.../Release/myVPN.app\` while the menu bar app is running
+### Note
+Helper daemon log is \`/var/log/myvpn-helper.log\` (forbidden lines). Reinstall helper only if proto bumps.
 EOF
 )" \
   --latest
 
-print -r -- "OK ${TAG} asset myVPN.app.zip"
-print -r -- "На этом Mac: Настройки → Update (или дождись автообновления). Не копируй из stage / DerivedData."
+print -r -- "OK ${TAG} assets myVPN.app.zip + myVPN.app.zip.sha256"
+print -r -- "На этом Mac: Настройки → Update. Не копируй из stage / DerivedData."

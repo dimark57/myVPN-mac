@@ -1256,7 +1256,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
                     self.updateStatusLabel?.stringValue = "Скачиваю…"
                     Task {
                         do {
-                            try await UpdateChecker.install(from: url)
+                            try await UpdateChecker.install(from: url, expectedSHA256: result.sha256)
                         } catch {
                             await MainActor.run {
                                 self.prefsBusy = false

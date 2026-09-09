@@ -31,9 +31,9 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.8 ---
+# --- Info.plist 0.5.9 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.8" ]] && pass "version $ver" || bad "version want 0.5.8 got $ver"
+[[ "$ver" == "0.5.9" ]] && pass "version $ver" || bad "version want 0.5.9 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
@@ -45,6 +45,14 @@ ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/m
 for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoDoctorPipeline WakeRecover SingleInstance; do
   [[ -f "${ROOT}/macos/MyVPN/MyVPN/${f}.swift" ]] && pass "swift $f" || bad "missing $f.swift"
 done
+
+# --- Observability 0.5.9 ---
+/usr/bin/grep -q 'UI_CMD' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI_CMD in AppDelegate" || bad "UI_CMD in AppDelegate"
+/usr/bin/grep -q 'forbidden peer_uid=' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper forbidden log" || bad "helper forbidden log"
+/usr/bin/grep -q 'helper_proto' "${ROOT}/lib/doctor.zsh" && pass "doctor helper_proto" || bad "doctor helper_proto"
+/usr/bin/grep -q 'checksumMismatch\|expectedSHA256\|sha256' "${ROOT}/macos/MyVPN/MyVPN/UpdateChecker.swift" && pass "UpdateChecker checksum" || bad "UpdateChecker checksum"
+/usr/bin/grep -q 'myVPN.app.zip.sha256' "${ROOT}/macos/MyVPN/release.zsh" && pass "release sha256 asset" || bad "release sha256 asset"
+/usr/bin/grep -q 'proto' "${ROOT}/lib/helper_client.py" && pass "helper_client proto" || bad "helper_client proto"
 
 # --- Single-instance 0.5.8 ---
 SI="${ROOT}/macos/MyVPN/MyVPN/SingleInstance.swift"

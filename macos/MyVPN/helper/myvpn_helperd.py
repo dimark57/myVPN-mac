@@ -133,7 +133,9 @@ def serve() -> None:
         conn, _ = server.accept()
         with conn:
             try:
-                if peer_uid(conn) != uid:
+                got_uid = peer_uid(conn)
+                if got_uid != uid:
+                    log(f"forbidden peer_uid={got_uid} want_uid={uid}")
                     conn.sendall(b"err forbidden\n")
                     continue
                 data = b""
