@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Every user-facing control → drops.log (diagnose «что нажали»).
+    private func uiCmd(_ name: String) {
+        DropLogger.logEvent("UI_CMD \(name)")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         log("didFinishLaunching bundle=\(Bundle.main.bundlePath)")
         // Single-instance before status item (0.5.8). Uses: SingleInstance, DropLogger.
@@ -143,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func handleHotkey(_ action: HotkeyAction) {
+        uiCmd("hotkey \(action)")
         switch action {
         case .toggleVPN:
             guard helperOn, !isBusy else {
@@ -412,6 +418,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             detail: nil,
             checked: nil,
             action: { [weak self] in
+                self?.uiCmd("quit")
                 self?.menu.cancelTracking()
                 NSApp.terminate(nil)
             }
@@ -580,7 +587,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     private func turnOn() {
-        DropLogger.logEvent("UI_CMD on")
+        uiCmd("on")
         DesiredStateStore.setDesiredOn()
         HealCircuitBreaker.resume(reason: "user_on")
         // Helper CMD_TIMEOUT=45; keep UI watchdog ≥ that (0.5.13).
@@ -623,7 +630,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func turnOff() {
-        DropLogger.logEvent("UI_CMD off")
+        uiCmd("off")
         DesiredStateStore.setDesiredOff()
         runCommand(key: "down", work: "Выключаю VPN", timeout: 35) {
             try MyVPNCLI.down()
@@ -638,7 +645,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func mountNAS() {
-        DropLogger.logEvent("UI_CMD mount-nas remount=\(snapshot.nas ? 1 : 0)")
+        uiCmd("mount-nas remount=\(snapshot.nas ? 1 : 0)")
         let wantRemount = snapshot.nas
         runCommand(key: "mount-nas", work: wantRemount ? "Перемонтирую NAS" : "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
             // Remount = unmount → mount (not --safe BUSY abort). Fresh mount stays safe.
@@ -657,6 +664,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateRules() {
+        uiCmd("update-rules")
         runCommand(key: "update-rules", work: "Обновляю списки RU…") {
             try MyVPNCLI.updateRules()
         } afterSuccess: { [weak self] in
@@ -667,6 +675,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openDoctorReport() {
+        uiCmd("open-report")
         let url = DoctorStatus.latestURL
         guard FileManager.default.fileExists(atPath: url.path) else {
             notify(
@@ -681,6 +690,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Copy latest doctor report + open GitHub Issues (Настройки → Диагностика).
     private func sendDoctorReportToDeveloper() {
+        uiCmd("send-report github-issues")
         let url = DoctorStatus.latestURL
         guard let text = try? String(contentsOf: url, encoding: .utf8), !text.isEmpty else {
             notify(
@@ -723,7 +733,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctor() {
-        DropLogger.logEvent("UI_CMD doctor layer=L1")
+        uiCmd("doctor layer=L1")
         runCommand(key: "doctor", work: "Диагностика L1", timeout: 25, announceStart: false) {
             _ = try MyVPNCLI.doctor(deep: false)
         } afterSuccess: { [weak self] in
@@ -735,7 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctorDeep() {
-        DropLogger.logEvent("UI_CMD doctor layer=L2")
+        uiCmd("doctor layer=L2")
         runCommand(key: "doctor", work: "Полная диагностика", timeout: AutoDoctor.l2DoctorTimeout, announceStart: true) {
             _ = try MyVPNCLI.doctor(deep: true)
         } afterSuccess: { [weak self] in
@@ -748,7 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func checkUpdateFromMenu() {
         guard !updateInFlight, busyKey == nil else { return }
-        DropLogger.logEvent("UI_CMD update-check")
+        uiCmd("update-check")
         busyKey = "check-update"
         rebuildMenu()
         applyIcon()
@@ -810,7 +820,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func installHelper() {
-        DropLogger.logEvent("UI_CMD helper-install")
+        uiCmd("helper-install")
         runCommand(key: "helper-install", work: "Устанавливаю помощник…") {
             try MyVPNHelper.install()
             MyVPNHelper.clearDismissedUpgrade()
@@ -855,6 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func openConnectionSettings(section: ConnectionSettingsWindowController.Section = .channels) {
+        uiCmd("settings section=\(section)")
         if connectionSettingsWC == nil {
             connectionSettingsWC = ConnectionSettingsWindowController(section: section)
         }
@@ -871,6 +882,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func settingsRunDoctor() { runDoctor() }
     func settingsRunDoctorDeep() { runDoctorDeep() }
     func settingsResumeSafeMode() {
+        uiCmd("safe-mode-resume")
         HealCircuitBreaker.resume(reason: "settings_resume")
         notify(
             title: "myVPN · Safe Mode",

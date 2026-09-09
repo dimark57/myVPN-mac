@@ -141,17 +141,22 @@ print -r -- "ship: HEAD ${HEAD} build ${BUILD}"
 print -r -- "ship: tag ${TAG} → ${HEAD} (before gh — no retag)"
 git tag -a "${TAG}" -m "myVPN ${VERSION}" "${HEAD}"
 
+if (( NO_PUSH == 0 )); then
+  # Push tag BEFORE gh release create — otherwise gh may mint a remote tag on the wrong tip.
+  print -r -- "ship: push main + ${TAG} (before assets)"
+  git push -u origin HEAD
+  git push origin "${TAG}"
+else
+  print -r -- "ship: --no-push set; will not push before gh"
+fi
+
 print -r -- "ship: package + gh release (no second plist bump)…"
 MYVPN_RELEASE_NO_BUMP=1 \
 MYVPN_RELEASE_NOTES="$NOTES" \
 MYVPN_GH_REPO="$REPO" \
   "${APP_DIR}/release.zsh" "${VERSION}"
 
-if (( NO_PUSH == 0 )); then
-  print -r -- "ship: push main + ${TAG}"
-  git push -u origin HEAD
-  git push origin "${TAG}"
-else
+if (( NO_PUSH == 1 )); then
   print -r -- "ship: --no-push set; push manually: git push origin HEAD && git push origin ${TAG}"
 fi
 

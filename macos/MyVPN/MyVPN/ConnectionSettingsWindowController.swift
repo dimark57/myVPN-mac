@@ -49,6 +49,10 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     private var routeNoteField: NSTextField!
     private var selectedRouteIndex: Int = 0
 
+    private func uiCmd(_ name: String) {
+        DropLogger.logEvent("UI_CMD settings \(name)")
+    }
+
     // Shares pane
     private var nasHostField: NSTextField!
     private var nasShareField: NSTextField!
@@ -907,6 +911,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     @objc private func updateDomainZones() {
         guard !prefsBusy else { return }
+        DropLogger.logEvent("UI_CMD update-rules settings")
         prefsBusy = true
         zonesActionButton?.isEnabled = false
         zonesStatusLabel?.stringValue = "Обновляю…"
@@ -1275,6 +1280,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     @objc private func toggleAutostart() {
         guard !prefsBusy, let autostartCheck else { return }
         let next = autostartCheck.state == .on
+        DropLogger.logEvent("UI_CMD autostart on=\(next ? 1 : 0)")
         prefsBusy = true
         autostartCheck.isEnabled = false
         workQueue.async { [weak self] in
@@ -1300,6 +1306,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
     @objc private func toggleAutoNAS() {
         guard !prefsBusy, let autoNasCheck else { return }
         let next = autoNasCheck.state == .on
+        DropLogger.logEvent("UI_CMD auto-nas on=\(next ? 1 : 0)")
         prefsBusy = true
         autoNasCheck.isEnabled = false
         workQueue.async { [weak self] in

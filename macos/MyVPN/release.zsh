@@ -58,13 +58,21 @@ fi
 print -r -- "Publishing ${TAG} → GitHub…"
 if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
   gh release upload "${TAG}" "${ZIP}" "${SHA}" --repo "${REPO}" --clobber
+  # Tag retarget / orphan draft → always publish + latest for in-app Update (/releases/latest).
+  gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest >/dev/null
 else
-  # Tag must already exist (ship.zsh). --target keeps release tip = that commit.
+  # Tag must already exist (ship.zsh pushed it). --latest for UpdateChecker.
   gh release create "${TAG}" "${ZIP}" "${SHA}" \
     --repo "${REPO}" \
     --title "myVPN ${VERSION}" \
     --notes "${NOTES}" \
     --latest
+fi
+
+# Drafts are invisible to api.github.com/.../releases/latest (in-app Update).
+if gh release view "${TAG}" --repo "${REPO}" --json isDraft -q .isDraft 2>/dev/null | /usr/bin/grep -qi true; then
+  print -r -- "ship/release: ${TAG} was draft — publishing"
+  gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest >/dev/null
 fi
 
 print -r -- "OK ${TAG} assets myVPN.app.zip + myVPN.app.zip.sha256"

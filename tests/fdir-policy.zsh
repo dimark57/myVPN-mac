@@ -31,11 +31,18 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
+# --- UI_CMD coverage 0.5.15 ---
+/usr/bin/grep -q 'func uiCmd' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "uiCmd helper" || bad "uiCmd helper"
+/usr/bin/grep -q 'send-report github-issues' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI_CMD send-report" || bad "UI_CMD send-report"
+/usr/bin/grep -q 'UI_CMD autostart' "${ROOT}/macos/MyVPN/MyVPN/ConnectionSettingsWindowController.swift" && pass "UI_CMD autostart" || bad "UI_CMD autostart"
+/usr/bin/grep -q 'UI_CMD auto-nas' "${ROOT}/macos/MyVPN/MyVPN/ConnectionSettingsWindowController.swift" && pass "UI_CMD auto-nas" || bad "UI_CMD auto-nas"
+/usr/bin/grep -q 'uiCmd("quit")' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI_CMD quit" || bad "UI_CMD quit"
+
 # --- Remount 0.5.14 ---
 /usr/bin/grep -q '\-\-remount' "${ROOT}/lib/nas.zsh" && pass "nas --remount" || bad "nas --remount"
 /usr/bin/grep -q 'myvpn_nas_graceful_unmount\|nas unmount' "${ROOT}/lib/nas.zsh" && pass "nas graceful unmount" || bad "nas graceful unmount"
 /usr/bin/grep -q 'remount: true\|remount: Bool' "${ROOT}/macos/MyVPN/MyVPN/MyVPNCLI.swift" && pass "CLI remount param" || bad "CLI remount param"
-/usr/bin/grep -q 'UI_CMD mount-nas remount=' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI remount flag" || bad "UI remount flag"
+/usr/bin/grep -q 'UI_CMD mount-nas remount=\|mount-nas remount=' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI remount flag" || bad "UI remount flag"
 
 # --- ship.zsh / release NO_BUMP (cd macos-gh-app) ---
 [[ -x "${ROOT}/macos/MyVPN/ship.zsh" ]] && pass "ship.zsh executable" || bad "ship.zsh executable"
@@ -43,9 +50,9 @@ fi
 /usr/bin/grep -q 'MYVPN_RELEASE_NO_BUMP' "${ROOT}/macos/MyVPN/release.zsh" && pass "release respects NO_BUMP" || bad "release respects NO_BUMP"
 /usr/bin/grep -q 'macos-gh-app' "${ROOT}/AGENTS.md" && pass "AGENTS macos-gh-app" || bad "AGENTS macos-gh-app"
 
-# --- Info.plist 0.5.14 ---
+# --- Info.plist 0.5.15 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.14" ]] && pass "version $ver" || bad "version want 0.5.14 got $ver"
+[[ "$ver" == "0.5.15" ]] && pass "version $ver" || bad "version want 0.5.15 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
