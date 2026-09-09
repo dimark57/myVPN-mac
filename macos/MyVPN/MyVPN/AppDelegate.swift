@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var lastUpdateCheck: UpdateChecker.Result?
     /// Prevent overlapping auto-doctor/heal pipelines.
     private var autoDoctorInFlight = false
+    private var sessionCid = "sess_" + String(UUID().uuidString.prefix(8))
+    private var egressPollCounter = 0
+    private var wakeObserver: NSObjectProtocol?
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -69,11 +72,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshStatus()
         refreshPrefs()
         startGlobalHotkeys()
+        registerWakeHandler()
 
         // Fallback only — primary updates: menu open + pid-file watcher (Alfred gv / CLI).
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let self, !self.isBusy else { return }
-            self.refreshStatus(includePublicIP: false)
+            // Every 4th tick (~60s): egress probe for hard DROP (doc-10).
+            self.egressPollCounter += 1
+            let wantIP = self.egressPollCounter % 4 == 0
+            self.refreshStatus(includePublicIP: wantIP)
             self.refreshPrefs()
         }
         if let refreshTimer {
@@ -543,14 +550,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions
 
     private func turnOn() {
+        DesiredStateStore.setDesiredOn()
+        HealCircuitBreaker.resume(reason: "user_on")
         runCommand(key: "up", work: "Включаю VPN") {
             try MyVPNCLI.up()
         } afterSuccess: { [weak self] in
             guard let self else { return }
+            DesiredStateStore.setDesiredOn()
             if self.autoNASOn {
                 // Helper up bypasses CLI remount hook — remount as a visible second phase.
-                self.runCommand(key: "mount-nas", work: "Монтирую NAS") {
-                    try MyVPNCLI.mountNAS(force: true)
+                self.runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
+                    try MyVPNCLI.mountNAS(force: false, safe: true)
                 } afterSuccess: { [weak self] in
                     self?.notify(
                         title: "myVPN ✓ Готово",
@@ -569,9 +579,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func turnOff() {
+        DesiredStateStore.setDesiredOff()
         runCommand(key: "down", work: "Выключаю VPN") {
             try MyVPNCLI.down()
         } afterSuccess: { [weak self] in
+            DesiredStateStore.setDesiredOff()
             self?.notify(
                 title: "myVPN ✓ VPN",
                 body: "Выключен · \(DoctorStatus.nowStamp())",
@@ -581,8 +593,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func mountNAS() {
-        runCommand(key: "mount-nas", work: "Монтирую NAS") {
-            try MyVPNCLI.mountNAS()
+        runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
+            try MyVPNCLI.mountNAS(safe: true)
         } afterSuccess: { [weak self] in
             self?.notify(
                 title: "myVPN ✓ NAS",
@@ -659,13 +671,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func runDoctor() {
-        runCommand(key: "doctor", work: "Диагностика", timeout: 90, announceStart: false) {
-            _ = try MyVPNCLI.doctor()
+        runCommand(key: "doctor", work: "Диагностика L1", timeout: 15, announceStart: false) {
+            _ = try MyVPNCLI.doctor(deep: false)
         } afterSuccess: { [weak self] in
             guard let self else { return }
             self.doctor = DoctorStatus.load()
             let pair = self.doctor.notificationPair
             self.notify(title: pair.title, body: pair.body, replacing: "doctor")
+        }
+    }
+
+    private func runDoctorDeep() {
+        runCommand(key: "doctor", work: "Полная диагностика", timeout: AutoDoctor.l2DoctorTimeout, announceStart: true) {
+            _ = try MyVPNCLI.doctor(deep: true)
+        } afterSuccess: { [weak self] in
+            guard let self else { return }
+            self.doctor = DoctorStatus.load()
+            let pair = self.doctor.notificationPair
+            self.notify(title: pair.title, body: pair.body + " · L2", replacing: "doctor")
         }
     }
 
@@ -754,6 +777,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Settings bridge
 
     func settingsRunDoctor() { runDoctor() }
+    func settingsRunDoctorDeep() { runDoctorDeep() }
+    func settingsResumeSafeMode() {
+        HealCircuitBreaker.resume(reason: "settings_resume")
+        notify(
+            title: "myVPN · Safe Mode",
+            body: "Автоheal снова разрешён · \(DoctorStatus.nowStamp())",
+            replacing: "safe-mode"
+        )
+    }
     func settingsUpdateRules() { updateRules() }
     func settingsOpenDoctorReport() { openDoctorReport() }
     func settingsSendDoctorReport() { sendDoctorReportToDeveloper() }
@@ -861,6 +893,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let live = MyVPNCLI.status(includePublicIP: false)
             if live.isOn {
                 self.log("auto-up: already on")
+                DesiredStateStore.setDesiredOn()
                 DispatchQueue.main.async {
                     self.busyKey = nil
                     self.snapshot = live
@@ -870,6 +903,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             let wantNas = MyVPNCLI.autoNASEnabled()
+            DesiredStateStore.setDesiredOn()
             DispatchQueue.main.async {
                 self.autoNASOn = wantNas
                 self.notify(title: "myVPN", body: "Включаю VPN · \(DoctorStatus.nowStamp())", replacing: "auto-up")
@@ -896,7 +930,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.notify(title: "myVPN", body: "Монтирую NAS · \(DoctorStatus.nowStamp())", replacing: "auto-nas")
                         if self.menuIsOpen { self.rebuildMenu() }
                     }
-                    try? MyVPNCLI.mountNAS(force: true)
+                    try? MyVPNCLI.mountNAS(force: true, safe: true)
                 }
                 let final = MyVPNCLI.status(includePublicIP: true)
                 DispatchQueue.main.async {
@@ -1066,6 +1100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 let changed = self.snapshot != next
                 self.snapshot = next
+                FlightRecorder.append(sample: next, sessionCid: self.sessionCid)
                 if let drop = DropLogger.observe(next) {
                     self.handleChannelDrop(drop)
                 }
@@ -1078,131 +1113,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// DropLogger 1→0 → optional auto doctor + heal (doc-9 / AutoDoctor).
-    private func handleChannelDrop(_ body: String) {
-        notify(title: "myVPN ⚠ Отвал", body: body, replacing: "drop")
-        guard AutoDoctor.autoDoctorEnabled else { return }
+    /// DropLogger hard DROP → FDIR pipeline (doc-10). Auto L1 on dedicated queue (no 55s busy).
+    private func handleChannelDrop(_ event: DropLogger.DropEvent) {
+        notify(title: "myVPN ⚠ Отвал", body: event.body, replacing: "drop")
+        guard AutoDoctor.autoDoctorEnabled || event.intentionalOff else { return }
         guard !autoDoctorInFlight else {
             DropLogger.logEvent("AUTO_DOCTOR skip=in_flight")
             return
         }
-        // Don't fight a user-initiated long op (except allow nesting after idle).
         if let busyKey, busyKey != "auto-doctor", busyKey != "auto-heal" {
             DropLogger.logEvent("AUTO_DOCTOR skip=busy:\(busyKey)")
             return
         }
-        runAutoDoctorPipeline()
-    }
-
-    private func runAutoDoctorPipeline() {
         autoDoctorInFlight = true
-        busyKey = "auto-doctor"
-        if menuIsOpen { rebuildMenu() }
-        applyIcon()
-        notify(
-            title: "myVPN · Автодиагностика",
-            body: "Снимаю отчёт · \(DoctorStatus.nowStamp())",
-            replacing: "auto-doctor"
-        )
-        workQueue.async { [weak self] in
-            do {
-                _ = try MyVPNCLI.doctor()
-                let doc = DoctorStatus.load()
-                DropLogger.logEvent(
-                    "AUTO_DOCTOR primary=\(doc.primary.isEmpty ? "?" : doc.primary) overall=\(doc.overall.isEmpty ? "?" : doc.overall)"
-                )
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.doctor = doc
-                    let pair = doc.notificationPair
-                    self.notify(title: pair.title, body: pair.body, replacing: "auto-doctor")
-                    if self.menuIsOpen { self.rebuildMenu() }
-                }
-
-                guard AutoDoctor.autoHealEnabled else {
-                    DropLogger.logEvent("AUTO_HEAL skip=disabled")
-                    DispatchQueue.main.async { self?.finishAutoDoctor() }
-                    return
-                }
-
-                let kind = AutoDoctor.healKind(for: doc.primary)
-                if case .none(let reason) = kind {
-                    DropLogger.logEvent("AUTO_HEAL skip=\(reason) primary=\(doc.primary)")
-                    DispatchQueue.main.async {
-                        self?.notify(
-                            title: "myVPN · Без автовосстановления",
-                            body: "\(doc.userHeadline): \(reason) · \(DoctorStatus.nowStamp())",
-                            replacing: "auto-heal"
-                        )
-                        self?.finishAutoDoctor()
-                    }
-                    return
-                }
-
-                let gate = AutoDoctor.canHealNow(primary: doc.primary, kind: kind)
-                guard gate.ok else {
-                    DropLogger.logEvent("AUTO_HEAL skip=\(gate.reason ?? "gate") primary=\(doc.primary)")
-                    DispatchQueue.main.async {
-                        self?.notify(
-                            title: "myVPN · Heal отложен",
-                            body: "\(gate.reason ?? "cooldown") · \(DoctorStatus.nowStamp())",
-                            replacing: "auto-heal"
-                        )
-                        self?.finishAutoDoctor()
-                    }
-                    return
-                }
-
-                let followUp = AutoDoctor.isFollowUpHeal(primary: doc.primary, kind: kind)
-                DispatchQueue.main.async {
+        AutoDoctorPipeline.run(
+            sessionCid: sessionCid,
+            event: event,
+            callbacks: AutoDoctorPipeline.Callbacks(
+                onDoctorLoaded: { [weak self] doc in
+                    self?.doctor = doc
+                    if self?.menuIsOpen == true { self?.rebuildMenu() }
+                },
+                onNotify: { [weak self] title, body, key in
+                    self?.notify(title: title, body: body, replacing: key)
+                },
+                onBusyHeal: { [weak self] in
                     self?.busyKey = "auto-heal"
                     if self?.menuIsOpen == true { self?.rebuildMenu() }
-                    self?.notify(
-                        title: "myVPN · Автовосстановление",
-                        body: "\(AutoDoctor.kindLabel(kind))\(followUp ? " · follow-up" : "") · \(DoctorStatus.nowStamp())",
-                        replacing: "auto-heal"
-                    )
-                }
-
-                do {
-                    try AutoDoctor.performHeal(kind)
-                    AutoDoctor.recordHeal(kind: kind, primary: doc.primary)
-                    DropLogger.logEvent(
-                        "AUTO_HEAL ok=1 action=\(AutoDoctor.kindLabel(kind)) primary=\(doc.primary)\(followUp ? " follow-up=1" : "")"
-                    )
-                    DispatchQueue.main.async {
-                        self?.notify(
-                            title: "myVPN ✓ Восстановлено",
-                            body: "\(AutoDoctor.kindLabel(kind)) после \(doc.primary) · \(DoctorStatus.nowStamp())",
-                            replacing: "auto-heal"
-                        )
-                        self?.finishAutoDoctor()
-                        self?.refreshStatus(includePublicIP: true)
-                    }
-                } catch {
-                    DropLogger.logEvent("AUTO_HEAL ok=0 action=\(AutoDoctor.kindLabel(kind)) err=\(error.localizedDescription)")
-                    DispatchQueue.main.async {
-                        self?.notify(
-                            title: "myVPN ✕ Автовосстановление",
-                            body: error.localizedDescription,
-                            replacing: "auto-heal"
-                        )
-                        self?.finishAutoDoctor()
-                        self?.refreshStatus()
-                    }
-                }
-            } catch {
-                DropLogger.logEvent("AUTO_DOCTOR ok=0 err=\(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self?.notify(
-                        title: "myVPN ✕ Автодиагностика",
-                        body: error.localizedDescription,
-                        replacing: "auto-doctor"
-                    )
+                    self?.applyIcon()
+                },
+                onFinished: { [weak self] in
                     self?.finishAutoDoctor()
+                },
+                onRefresh: { [weak self] includeIP in
+                    self?.refreshStatus(includePublicIP: includeIP)
                 }
-            }
-        }
+            )
+        )
     }
 
     private func finishAutoDoctor() {
@@ -1213,6 +1160,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         doctor = DoctorStatus.load()
         applyIcon()
         if menuIsOpen { rebuildMenu() }
+    }
+
+    private func registerWakeHandler() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            DesiredStateStore.enterGrace(seconds: AutoDoctor.postChangeGraceSeconds)
+            DropLogger.logEvent("WAKE grace=\(Int(AutoDoctor.postChangeGraceSeconds))с")
+            FlightRecorder.append(sample: self.snapshot, sessionCid: self.sessionCid, wake: true)
+            // Re-pin happens inside next up; soft refresh with egress after settle.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                self?.refreshStatus(includePublicIP: true)
+            }
+        }
     }
 
     private func notify(title: String, body: String, replacing key: String? = nil) {

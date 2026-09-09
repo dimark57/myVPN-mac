@@ -60,17 +60,18 @@ updated_date: '2026-09-08 13:20'
 - Настройки… → окно (shell фиксирован: sidebar + content frame одной высоты):
   - System Helper / Channels / Routes / **Доменные зоны** / Shares / **Диагностика** / Update / Справка
   - Доменные зоны: Обновить RU (geosite/geoip)
-  - Диагностика: галочки автодиагностики / автовосстановления; коды отвалов; журнал `drops.log`; отчёт + GitHub Issues (**doc-9**)
+  - Диагностика: галочки автодиагностики / автовосстановления; L1/L2; Safe Mode Resume; коды отвалов; журнал `drops.log`; отчёт + GitHub Issues (**doc-9** + **doc-10 FDIR**)
 - Справка — только внутри Настроек (не отдельный пункт menu bar)
 - Установка app — только GitHub Releases (не локальный `install-app.zsh`)
 
-### Автодоктор (DropLogger → doctor → heal)
+### Автодоктор (FDIR 0.5 — doc-10)
 
-При `1→0` (tun/home/macbook/nas), если галочки ON:
+Hard DROP (tun/nas/egress; ICMP peer = FLAP only) → L1 doctor → heal:
 
-1. `myvpn doctor` → `~/.cache/myvpn-doctor/report-*.txt` + `AUTO_DOCTOR` в `drops.log`
-2. По PRIMARY (матрица **doc-9**): `up` / `down→up` / `mount-nas --force` / `flush-dns`
-3. Cooldown ≥5 мин, ≤3 heal/час; `CONFLICT_WG_APP` и `HEALTHY*` — без heal
+1. `DesiredState`: ручной Off → без `AUTO_HEAL up`
+2. `myvpn doctor` (L1) / `doctor --deep` (L2) → report + `AUTO_DOCTOR` + `cid`
+3. По PRIMARY (**doc-9**): `up` / `down→up` / `mount-nas --safe` / `flush-dns` + verify
+4. Cooldown restart 300с после verify; Safe Mode; grace 60с; `flight.jsonl` + `incidents/`
 
 Prefs: UserDefaults `local.myvpn.mac.autoDoctor` / `autoHeal` (default ON).
 
@@ -101,4 +102,4 @@ On/Off через helper socket после установки помощника
 - Упаковка: задача **MYMAC-8**.
 - UX RU: **doc-7** / **MYMAC-9**.
 - Следующий этап без admin вообще: **doc-5**.
-- Автодоктор / таксономия heal: **doc-9**.
+- Автодоктор / таксономия heal: **doc-9**; control plane FDIR: **doc-10**.

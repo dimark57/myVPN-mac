@@ -25,6 +25,11 @@
 		A10000000000000000000059 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000068 /* UpdateChecker.swift */; };
 		A1000000000000000000005A /* GlobalHotkeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000069 /* GlobalHotkeys.swift */; };
 		A1000000000000000000005B /* AutoDoctor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006A /* AutoDoctor.swift */; };
+		A1000000000000000000005C /* DesiredStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006B /* DesiredStateStore.swift */; };
+		A1000000000000000000005D /* HealCircuitBreaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006C /* HealCircuitBreaker.swift */; };
+		A1000000000000000000005E /* FlightRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006D /* FlightRecorder.swift */; };
+		A1000000000000000000005F /* IncidentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006E /* IncidentStore.swift */; };
+		A10000000000000000000070 /* AutoDoctorPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006F /* AutoDoctorPipeline.swift */; };
 		A1000000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -48,6 +53,11 @@
 		A10000000000000000000068 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		A10000000000000000000069 /* GlobalHotkeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeys.swift; sourceTree = "<group>"; };
 		A1000000000000000000006A /* AutoDoctor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctor.swift; sourceTree = "<group>"; };
+		A1000000000000000000006B /* DesiredStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesiredStateStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000006C /* HealCircuitBreaker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealCircuitBreaker.swift; sourceTree = "<group>"; };
+		A1000000000000000000006D /* FlightRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightRecorder.swift; sourceTree = "<group>"; };
+		A1000000000000000000006E /* IncidentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000006F /* AutoDoctorPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctorPipeline.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -91,6 +101,11 @@
 				A10000000000000000000068 /* UpdateChecker.swift */,
 				A10000000000000000000069 /* GlobalHotkeys.swift */,
 				A1000000000000000000006A /* AutoDoctor.swift */,
+				A1000000000000000000006B /* DesiredStateStore.swift */,
+				A1000000000000000000006C /* HealCircuitBreaker.swift */,
+				A1000000000000000000006D /* FlightRecorder.swift */,
+				A1000000000000000000006E /* IncidentStore.swift */,
+				A1000000000000000000006F /* AutoDoctorPipeline.swift */,
 				A10000000000000000000061 /* StickyMenuItemView.swift */,
 				A10000000000000000000028 /* Assets.xcassets */,
 				A10000000000000000000023 /* Info.plist */,
@@ -188,6 +203,11 @@
 				A10000000000000000000059 /* UpdateChecker.swift in Sources */,
 				A1000000000000000000005A /* GlobalHotkeys.swift in Sources */,
 				A1000000000000000000005B /* AutoDoctor.swift in Sources */,
+				A1000000000000000000005C /* DesiredStateStore.swift in Sources */,
+				A1000000000000000000005D /* HealCircuitBreaker.swift in Sources */,
+				A1000000000000000000005E /* FlightRecorder.swift in Sources */,
+				A1000000000000000000005F /* IncidentStore.swift in Sources */,
+				A10000000000000000000070 /* AutoDoctorPipeline.swift in Sources */,
 				A10000000000000000000052 /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

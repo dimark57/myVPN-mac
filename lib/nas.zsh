@@ -94,11 +94,21 @@ myvpn_nas_wait_host() {
   return 1
 }
 
+# True if any process holds open files on the NAS mount (Cursor/IDE deadlock risk).
+myvpn_nas_volume_busy() {
+  [[ -d "${MYVPN_NAS_MOUNT}" ]] || return 1
+  /usr/sbin/lsof "${MYVPN_NAS_MOUNT}" 2>/dev/null | /usr/bin/awk 'NR>1{found=1; exit} END{exit !found}'
+}
+
 myvpn_cmd_mount_nas() {
-  local pw pw_enc tries=0 err force=0
-  case "${1:-}" in
-    --force|-f) force=1; shift || true ;;
-  esac
+  local pw pw_enc tries=0 err force=0 safe=0
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --force|-f) force=1 ;;
+      --safe|-s) safe=1 ;;
+    esac
+  done
 
   if (( force == 0 )) && myvpn_nas_is_mounted; then
     if myvpn_nas_is_alive; then
@@ -107,6 +117,11 @@ myvpn_cmd_mount_nas() {
     fi
     print -r -- "nas mount stale at ${MYVPN_NAS_MOUNT} — remounting"
     force=1
+  fi
+
+  if (( force )) && (( safe )) && myvpn_nas_is_mounted && myvpn_nas_volume_busy; then
+    print -r -- "NAS_BUSY: ${MYVPN_NAS_MOUNT} has open files — skip force unmount (doc-10)" >&2
+    return 2
   fi
 
   if (( force )); then
@@ -169,5 +184,6 @@ myvpn_after_up_remount_nas() {
     return 0
   fi
   print -r -- "auto-nas: remount after vpn up"
-  myvpn_cmd_mount_nas --force || true
+  # --safe: never force-unmount under live IDE/Cursor on /Volumes/Nas (doc-10).
+  myvpn_cmd_mount_nas --force --safe || true
 }

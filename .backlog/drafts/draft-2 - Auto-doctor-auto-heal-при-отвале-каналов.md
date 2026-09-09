@@ -10,6 +10,7 @@ dependencies: []
 documentation:
   - doc-4
   - doc-9
+  - doc-10
 priority: high
 ---
 
@@ -59,7 +60,15 @@ priority: high
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-Критерии:
+### FDIR rework → 0.5.0 (2026-09-09)
+
+Delivery MVP auto-doctor/heal для релиза **0.5.0** — **переработка FDIR**, не патч 0.4.x.
+
+- **SoT control plane:** [doc-10 — FDIR: DesiredState, L0/L1/L2, Safe Mode](../docs/specs/doc-10%20-%20FDIR-автодоктор-DesiredState-L1-L2.md) (DesiredState, INTENTIONAL_OFF, wall-clock CONFIRM/grace, Safe Mode, L0/L1/L2, verify, NAS busy, flight/incidents, AC T5–T8).
+- **SoT PRIMARY catalog / heal matrix:** по-прежнему **doc-9**; doc-10 supersedes только control-plane секции doc-9.
+- Gate: сценарии инцидента 09.09 + T5–T8; ship `release.zsh 0.5.0`.
+
+Критерии (MVP baseline; уточнения — doc-10):
 - При 1→0 (tun/home/macbook/nas) app сам гоняет `myvpn doctor` и пишет полный отчёт в `~/.cache/myvpn-doctor/` (как ручная диагностика) — **если галочка «Автодиагностика при отвале» ON**.
 - После doctor (fail с PRIMARY вроде MACBOOK_EGRESS_DOWN / TUN_DOWN / HOME_*) — один авто-heal: down→up (или эквивалент CLI), без пароля если helper есть — **если галочка «Автовосстановление» ON** (если doctor OFF — heal тоже OFF / disabled). Матрица: **doc-9 §5**.
 - Cooldown ≥5 мин между auto-heal; в drops.log / отчёте есть строки AUTO_DOCTOR / AUTO_HEAL + результат.

@@ -1,7 +1,8 @@
 import Foundation
 
-/// Background health DIFF logger + AUTO_* journal. Uses: StatusSnapshot, DoctorStatus cache dir, AutoDoctor.
-/// Hysteresis (N confirms across polls) + flap coalesce — Cloudflare WAN / MikroTik patterns.
+/// Background health DIFF logger + AUTO_* journal (doc-10 FDIR).
+/// Uses: StatusSnapshot, DoctorStatus, AutoDoctor, DesiredStateStore, IncidentStore.
+/// Hard DROP only on tun/nas; ICMP peer flaps stay FLAP-only.
 enum DropLogger {
     static var logURL: URL {
         URL(fileURLWithPath: DoctorStatus.cacheDir + "/drops.log")
@@ -14,19 +15,26 @@ enum DropLogger {
     private static let maxLogLines = 800
     private static let flapWindowSeconds: TimeInterval = 45
 
-    /// Healthy sample before the current drop streak (hysteresis baseline).
     private static var confirmBaseline: Sample?
     private static var confirmCount = 0
+    private static var confirmStartedAt: TimeInterval = 0
     private static var lastFlapChannels: String = ""
     private static var lastFlapAt: TimeInterval = 0
     private static var lastFlapCount = 0
 
-    /// Append a free-form journal line (AUTO_DOCTOR / AUTO_HEAL / …).
+    /// Active incident id after DROP_CONFIRMED until pipeline finishes.
+    static var currentIncidentCid: String?
+
     static func logEvent(_ message: String) {
-        append("[\(isoNow())] \(message)\n")
+        let suffix: String
+        if let cid = currentIncidentCid, !message.contains("cid=") {
+            suffix = " cid=\(cid)"
+        } else {
+            suffix = ""
+        }
+        append("[\(isoNow())] \(message)\(suffix)\n")
     }
 
-    /// Last N lines of drops.log for Settings → Диагностика.
     static func tailLines(_ n: Int = 12) -> String {
         guard let text = try? String(contentsOf: logURL, encoding: .utf8), !text.isEmpty else {
             return "(журнал пуст)"
@@ -40,24 +48,45 @@ enum DropLogger {
         var home: Bool
         var macbook: Bool
         var nas: Bool
+        /// Public IP non-empty (only meaningful after probe with includePublicIP).
+        var egress: Bool
 
         static func from(_ s: StatusSnapshot) -> Sample {
-            Sample(tun: s.tun, home: s.home, macbook: s.macbook, nas: s.nas)
+            Sample(tun: s.tun, home: s.home, macbook: s.macbook, nas: s.nas, egress: !s.ip.isEmpty)
         }
 
         var dict: [String: Int] {
-            ["tun": tun ? 1 : 0, "home": home ? 1 : 0, "macbook": macbook ? 1 : 0, "nas": nas ? 1 : 0]
+            [
+                "tun": tun ? 1 : 0,
+                "home": home ? 1 : 0,
+                "macbook": macbook ? 1 : 0,
+                "nas": nas ? 1 : 0,
+                "egress": egress ? 1 : 0,
+            ]
+        }
+
+        func softDropFrom(_ prev: Sample) -> Bool {
+            (prev.home && !home) || (prev.macbook && !macbook)
+        }
+
+        func hardDropFrom(_ prev: Sample) -> Bool {
+            (prev.tun && !tun)
+                || (prev.nas && !nas)
+                || (prev.tun && tun && prev.egress && !egress)
         }
 
         func hasDropFrom(_ prev: Sample) -> Bool {
-            (prev.tun && !tun) || (prev.home && !home) || (prev.macbook && !macbook) || (prev.nas && !nas)
+            hardDropFrom(prev) || softDropFrom(prev)
         }
 
-        func dropLabels(from prev: Sample) -> [String] {
+        func dropLabels(from prev: Sample, hardOnly: Bool) -> [String] {
             var drops: [String] = []
             if prev.tun && !tun { drops.append("VPN выключился") }
-            if prev.home && !home { drops.append("домашний канал пропал") }
-            if prev.macbook && !macbook { drops.append("macbook-peer не отвечает") }
+            if prev.tun && tun && prev.egress && !egress { drops.append("нет интернета через VPN") }
+            if !hardOnly {
+                if prev.home && !home { drops.append("домашний канал пропал") }
+                if prev.macbook && !macbook { drops.append("macbook-peer не отвечает") }
+            }
             if prev.nas && !nas { drops.append("NAS отключился") }
             return drops
         }
@@ -71,7 +100,8 @@ enum DropLogger {
                 tun: (obj["tun"] as? Int) == 1,
                 home: (obj["home"] as? Int) == 1,
                 macbook: (obj["macbook"] as? Int) == 1,
-                nas: (obj["nas"] as? Int) == 1
+                nas: (obj["nas"] as? Int) == 1,
+                egress: (obj["egress"] as? Int) == 1
             )
         }
 
@@ -86,8 +116,14 @@ enum DropLogger {
         }
     }
 
-    /// Compare with previous sample; coalesce flaps; notify only after N confirms (incl. stable-bad polls).
-    static func observe(_ snap: StatusSnapshot) -> String? {
+    struct DropEvent {
+        let body: String
+        let cid: String
+        let channels: [String]
+        let intentionalOff: Bool
+    }
+
+    static func observe(_ snap: StatusSnapshot) -> DropEvent? {
         let cur = Sample.from(snap)
         defer { cur.save() }
         guard let prev = Sample.load() else { return nil }
@@ -96,27 +132,39 @@ enum DropLogger {
             logDiffOrFlap(prev: prev, cur: cur)
         }
 
-        // Recovery clears hysteresis.
-        if let base = confirmBaseline, !cur.hasDropFrom(base) {
+        let hardEdge = cur.hardDropFrom(prev)
+        let softOnly = cur.softDropFrom(prev) && !hardEdge
+        if softOnly {
+            return nil
+        }
+
+        if let base = confirmBaseline, !cur.hardDropFrom(base) {
             if confirmCount > 0 {
                 append("[\(isoNow())] RECOVERED after confirm \(confirmCount)/\(AutoDoctor.dropConfirmNeeded)\n")
             }
             confirmBaseline = nil
             confirmCount = 0
+            confirmStartedAt = 0
             return nil
         }
 
-        // New drop vs last saved sample → start / continue streak.
-        if cur.hasDropFrom(prev) {
+        if DesiredStateStore.isInGrace {
+            if hardEdge {
+                append("[\(isoNow())] CONFIRM skip=grace\n")
+            }
+            return nil
+        }
+
+        if hardEdge {
             if confirmBaseline == nil {
                 confirmBaseline = prev
+                confirmStartedAt = Date().timeIntervalSince1970
             }
             confirmCount += 1
             return maybeFire(cur: cur)
         }
 
-        // Still bad vs baseline on a stable poll (prev==cur) — counts toward N (Cloudflare retry).
-        if let base = confirmBaseline, cur.hasDropFrom(base) {
+        if let base = confirmBaseline, cur.hardDropFrom(base) {
             confirmCount += 1
             return maybeFire(cur: cur)
         }
@@ -124,29 +172,47 @@ enum DropLogger {
         return nil
     }
 
-    private static func maybeFire(cur: Sample) -> String? {
+    private static func maybeFire(cur: Sample) -> DropEvent? {
         guard let base = confirmBaseline else { return nil }
         let need = AutoDoctor.dropConfirmNeeded
-        if confirmCount < need {
-            append("[\(isoNow())] CONFIRM \(confirmCount)/\(need)\n")
+        let elapsed = Date().timeIntervalSince1970 - confirmStartedAt
+        if confirmCount < need || elapsed < AutoDoctor.dropConfirmMinSeconds {
+            append(
+                "[\(isoNow())] CONFIRM \(confirmCount)/\(need) wall=\(Int(elapsed))с/\(Int(AutoDoctor.dropConfirmMinSeconds))с\n"
+            )
             return nil
         }
-        let drops = cur.dropLabels(from: base)
+
+        let intentionalOff = !DesiredStateStore.desiredOn && (base.tun && !cur.tun)
+        let drops = cur.dropLabels(from: base, hardOnly: true)
         confirmBaseline = nil
         confirmCount = 0
+        confirmStartedAt = 0
         guard !drops.isEmpty else { return nil }
+
+        let cid = IncidentStore.newCid()
+        currentIncidentCid = cid
+        let channels = drops.map { label -> String in
+            if label.contains("VPN") { return "tun" }
+            if label.contains("интернета") { return "egress" }
+            if label.contains("NAS") { return "nas" }
+            return "other"
+        }
 
         let stamp = DoctorStatus.nowStamp()
         let hint: String
-        if AutoDoctor.autoDoctorEnabled {
+        if intentionalOff {
+            hint = "ручной Off — без автовосстановления."
+        } else if AutoDoctor.autoDoctorEnabled {
             hint = AutoDoctor.autoHealEnabled
                 ? "автодиагностика + восстановление…"
                 : "автодиагностика…"
         } else {
             hint = "Жми «Диагностика»."
         }
-        append("[\(isoNow())] DROP_CONFIRMED \(drops.joined(separator: ", "))\n")
-        return "\(drops.joined(separator: ", ")) · \(stamp). \(hint)"
+        append("[\(isoNow())] DROP_CONFIRMED \(drops.joined(separator: ", ")) cid=\(cid)\n")
+        let body = "\(drops.joined(separator: ", ")) · \(stamp). \(hint)"
+        return DropEvent(body: body, cid: cid, channels: channels, intentionalOff: intentionalOff)
     }
 
     private static func logDiffOrFlap(prev: Sample, cur: Sample) {

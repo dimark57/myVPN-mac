@@ -39,6 +39,11 @@ I = {
     "ref_update": "A10000000000000000000068",
     "ref_hotkeys": "A10000000000000000000069",
     "ref_autodoctor": "A1000000000000000000006A",
+    "ref_desired": "A1000000000000000000006B",
+    "ref_breaker": "A1000000000000000000006C",
+    "ref_flight": "A1000000000000000000006D",
+    "ref_incident": "A1000000000000000000006E",
+    "ref_pipeline": "A1000000000000000000006F",
     "bf_app": "A10000000000000000000024",
     "bf_cli": "A10000000000000000000025",
     "bf_status": "A10000000000000000000026",
@@ -58,6 +63,11 @@ I = {
     "bf_update": "A10000000000000000000059",
     "bf_hotkeys": "A1000000000000000000005A",
     "bf_autodoctor": "A1000000000000000000005B",
+    "bf_desired": "A1000000000000000000005C",
+    "bf_breaker": "A1000000000000000000005D",
+    "bf_flight": "A1000000000000000000005E",
+    "bf_incident": "A1000000000000000000005F",
+    "bf_pipeline": "A10000000000000000000070",
     "build_proj_debug": "A10000000000000000000030",
     "build_proj_release": "A10000000000000000000031",
     "build_tgt_debug": "A10000000000000000000032",
@@ -93,6 +103,11 @@ pbx = f"""// !$*UTF8*$!
 		{I['bf_update']} /* UpdateChecker.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_update']} /* UpdateChecker.swift */; }};
 		{I['bf_hotkeys']} /* GlobalHotkeys.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_hotkeys']} /* GlobalHotkeys.swift */; }};
 		{I['bf_autodoctor']} /* AutoDoctor.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_autodoctor']} /* AutoDoctor.swift */; }};
+		{I['bf_desired']} /* DesiredStateStore.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_desired']} /* DesiredStateStore.swift */; }};
+		{I['bf_breaker']} /* HealCircuitBreaker.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_breaker']} /* HealCircuitBreaker.swift */; }};
+		{I['bf_flight']} /* FlightRecorder.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_flight']} /* FlightRecorder.swift */; }};
+		{I['bf_incident']} /* IncidentStore.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_incident']} /* IncidentStore.swift */; }};
+		{I['bf_pipeline']} /* AutoDoctorPipeline.swift in Sources */ = {{isa = PBXBuildFile; fileRef = {I['ref_pipeline']} /* AutoDoctorPipeline.swift */; }};
 		{I['bf_assets']} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {I['ref_assets']} /* Assets.xcassets */; }};
 /* End PBXBuildFile section */
 
@@ -116,6 +131,11 @@ pbx = f"""// !$*UTF8*$!
 		{I['ref_update']} /* UpdateChecker.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; }};
 		{I['ref_hotkeys']} /* GlobalHotkeys.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotkeys.swift; sourceTree = "<group>"; }};
 		{I['ref_autodoctor']} /* AutoDoctor.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctor.swift; sourceTree = "<group>"; }};
+		{I['ref_desired']} /* DesiredStateStore.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesiredStateStore.swift; sourceTree = "<group>"; }};
+		{I['ref_breaker']} /* HealCircuitBreaker.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealCircuitBreaker.swift; sourceTree = "<group>"; }};
+		{I['ref_flight']} /* FlightRecorder.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightRecorder.swift; sourceTree = "<group>"; }};
+		{I['ref_incident']} /* IncidentStore.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentStore.swift; sourceTree = "<group>"; }};
+		{I['ref_pipeline']} /* AutoDoctorPipeline.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctorPipeline.swift; sourceTree = "<group>"; }};
 		{I['ref_info']} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; }};
 		{I['ref_assets']} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
@@ -159,6 +179,11 @@ pbx = f"""// !$*UTF8*$!
 				{I['ref_update']} /* UpdateChecker.swift */,
 				{I['ref_hotkeys']} /* GlobalHotkeys.swift */,
 				{I['ref_autodoctor']} /* AutoDoctor.swift */,
+				{I['ref_desired']} /* DesiredStateStore.swift */,
+				{I['ref_breaker']} /* HealCircuitBreaker.swift */,
+				{I['ref_flight']} /* FlightRecorder.swift */,
+				{I['ref_incident']} /* IncidentStore.swift */,
+				{I['ref_pipeline']} /* AutoDoctorPipeline.swift */,
 				{I['ref_sticky']} /* StickyMenuItemView.swift */,
 				{I['ref_assets']} /* Assets.xcassets */,
 				{I['ref_info']} /* Info.plist */,
@@ -256,6 +281,11 @@ pbx = f"""// !$*UTF8*$!
 				{I['bf_update']} /* UpdateChecker.swift in Sources */,
 				{I['bf_hotkeys']} /* GlobalHotkeys.swift in Sources */,
 				{I['bf_autodoctor']} /* AutoDoctor.swift in Sources */,
+				{I['bf_desired']} /* DesiredStateStore.swift in Sources */,
+				{I['bf_breaker']} /* HealCircuitBreaker.swift in Sources */,
+				{I['bf_flight']} /* FlightRecorder.swift in Sources */,
+				{I['bf_incident']} /* IncidentStore.swift in Sources */,
+				{I['bf_pipeline']} /* AutoDoctorPipeline.swift in Sources */,
 				{I['bf_sticky']} /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

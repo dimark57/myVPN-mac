@@ -9,7 +9,20 @@ myvpn_cmd_doctor() {
   local report_dir report_file latest state_file prev_state
   local -a CHECK_LINES=() VERDICT_LINES=() ACTION_LINES=() EVIDENCE=()
   local -i FAIL_COUNT=0 WARN_COUNT=0
-  local ping_w="${MYVPN_PING_WAIT:-1000}"
+  local deep=0
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --deep|-d) deep=1 ;;
+    esac
+  done
+  # L1 triage: short ICMP wait; L2 deep: full probes (doc-10).
+  local ping_w
+  if (( deep )); then
+    ping_w="${MYVPN_PING_WAIT:-1000}"
+  else
+    ping_w="${MYVPN_PING_WAIT_L1:-400}"
+  fi
   local DIG="/usr/bin/dig"
   local CURL="/usr/bin/curl"
   local PING="/sbin/ping"
@@ -18,6 +31,8 @@ myvpn_cmd_doctor() {
   local NC="/usr/sbin/scutil"
   local ROUTE="/sbin/route"
   local primary="" confidence="medium"
+  local layer="L1"
+  (( deep )) && layer="L2"
 
   report_dir="$(myvpn_doctor_report_dir)"
   /bin/mkdir -p "${report_dir}"
@@ -54,8 +69,9 @@ myvpn_cmd_doctor() {
   _doc_evidence() { EVIDENCE+=("$1") }
   _doc_action() { ACTION_LINES+=("$1") }
 
-  _doc_log "=== myvpn doctor ==="
+  _doc_log "=== myvpn doctor ${layer} ==="
   _doc_log "root=${MYVPN_ROOT}"
+  _doc_log "layer=${layer} deep=${deep}"
   _doc_log "report → ${report_file}"
   _doc_log ""
 
@@ -324,50 +340,60 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     fi
   fi
 
-  local dns_backlog dns_ocode dns_remote
-  dns_backlog="$("${DIG}" +short +time=2 +tries=1 backlog.digials.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
-  dns_ocode="$("${DIG}" +short +time=2 +tries=1 ocode.digials.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
-  # Non-RU resolve via TUN hijack → should use dns-remote (macbook→1.1.1.1)
-  dns_remote="$("${DIG}" +short +time=2 +tries=1 cloudflare.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
-  # digials A-samples: soft WARN — hard signal is home gw / hub (avoids HEALTHY fail=1 noise).
-  if (( home )); then
-    if [[ "$dns_backlog" == "10.57.0.100" ]]; then
-      _doc_check "dns_backlog" "1" "got ${dns_backlog}"
-    else
-      _doc_check "dns_backlog" "2" "got ${dns_backlog:-empty} (soft — смотри hub/home)"
-    fi
-    if [[ "$dns_ocode" == "10.57.0.100" ]]; then
-      _doc_check "dns_ocode" "1" "got ${dns_ocode}"
-    else
-      _doc_check "dns_ocode" "2" "got ${dns_ocode:-empty} (soft — смотри hub/home)"
-    fi
-  else
-    _doc_check "dns_hub" "2" "home down — digials skip (backlog=${dns_backlog:-empty})"
-  fi
-  if (( tun )); then
-    if [[ "$dns_remote" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      _doc_check "dns_remote_sample" "1" "cloudflare.com → ${dns_remote}"
-    elif [[ -n "$dns_remote" ]]; then
-      _doc_check "dns_remote_sample" "0" "cloudflare.com not A: ${dns_remote}"
-      _doc_evidence "remote DNS via TUN failed"
-    else
-      _doc_check "dns_remote_sample" "0" "cloudflare.com empty (dns-remote/macbook?)"
-      _doc_evidence "remote DNS via TUN failed"
-    fi
-  fi
-
-  # --- Hub HTTP ---
+  local dns_backlog="" dns_ocode="" dns_remote=""
   local hub_code="000"
-  if (( home )); then
-    hub_code="$("${CURL}" -4 -sS -o /dev/null -w '%{http_code}' --max-time 6 https://backlog.digials.com/ 2>/dev/null || echo 000)"
-    _doc_check "hub_http" "$([[ "$hub_code" == "200" ]] && echo 1 || echo 0)" "HTTP ${hub_code}"
-    [[ "$hub_code" != "200" ]] && _doc_evidence "hub HTTP ${hub_code}"
+  local nas_host=0 nas_alive_rc=1 nas_key=0
+
+  if (( deep )); then
+    dns_backlog="$("${DIG}" +short +time=2 +tries=1 backlog.digials.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
+    dns_ocode="$("${DIG}" +short +time=2 +tries=1 ocode.digials.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
+    dns_remote="$("${DIG}" +short +time=2 +tries=1 cloudflare.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
+    if (( home )); then
+      if [[ "$dns_backlog" == "10.57.0.100" ]]; then
+        _doc_check "dns_backlog" "1" "got ${dns_backlog}"
+      else
+        _doc_check "dns_backlog" "2" "got ${dns_backlog:-empty} (soft — смотри hub/home)"
+      fi
+      if [[ "$dns_ocode" == "10.57.0.100" ]]; then
+        _doc_check "dns_ocode" "1" "got ${dns_ocode}"
+      else
+        _doc_check "dns_ocode" "2" "got ${dns_ocode:-empty} (soft — смотри hub/home)"
+      fi
+    else
+      _doc_check "dns_hub" "2" "home down — digials skip (backlog=${dns_backlog:-empty})"
+    fi
+    if (( tun )); then
+      if [[ "$dns_remote" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        _doc_check "dns_remote_sample" "1" "cloudflare.com → ${dns_remote}"
+      elif [[ -n "$dns_remote" ]]; then
+        _doc_check "dns_remote_sample" "0" "cloudflare.com not A: ${dns_remote}"
+        _doc_evidence "remote DNS via TUN failed"
+      else
+        _doc_check "dns_remote_sample" "0" "cloudflare.com empty (dns-remote/macbook?)"
+        _doc_evidence "remote DNS via TUN failed"
+      fi
+    fi
+    if (( home )); then
+      hub_code="$("${CURL}" -4 -sS -o /dev/null -w '%{http_code}' --max-time 6 https://backlog.digials.com/ 2>/dev/null || echo 000)"
+      _doc_check "hub_http" "$([[ "$hub_code" == "200" ]] && echo 1 || echo 0)" "HTTP ${hub_code}"
+      [[ "$hub_code" != "200" ]] && _doc_evidence "hub HTTP ${hub_code}"
+    else
+      _doc_check "hub_http" "2" "skip (home=0)"
+    fi
   else
-    _doc_check "hub_http" "2" "skip (home=0)"
+    # L1: one cheap remote dig (≤1s) — skip digials×2 + hub 6s.
+    if (( tun )); then
+      dns_remote="$("${DIG}" +short +time=1 +tries=1 cloudflare.com A 2>/dev/null | /usr/bin/head -1 | tr -d '\n')"
+      if [[ "$dns_remote" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        _doc_check "dns_remote_sample" "1" "cloudflare.com → ${dns_remote} (L1)"
+      else
+        _doc_check "dns_remote_sample" "2" "cloudflare.com ${dns_remote:-empty} (L1 soft)"
+      fi
+    fi
+    _doc_check "hub_http" "3" "skip L1 — myvpn doctor --deep"
   fi
 
   # --- NAS ---
-  local nas_host=0 nas_alive_rc=1 nas_key=0
   _doc_ping "${MYVPN_NAS_HOST}" && nas_host=1
   _doc_check "ping_nas" "$nas_host" "${MYVPN_NAS_HOST}"
 
@@ -377,19 +403,24 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   _doc_check "nas_keychain" "$nas_key" "${MYVPN_NAS_KEYCHAIN_SERVICE}/${MYVPN_NAS_USER}"
 
   if (( nas_fast )); then
-    myvpn_nas_is_alive
-    nas_alive_rc=$?
-    case "$nas_alive_rc" in
-      0) _doc_check "nas_alive" "1" "${MYVPN_NAS_MOUNT} listdir ok" ;;
-      2)
-        _doc_check "nas_alive" "2" "stale mount (timeout) — SMB, не VPN"
-        _doc_evidence "NAS mount stale"
-        ;;
-      *)
-        _doc_check "nas_alive" "2" "mount present but not alive — SMB, не VPN"
-        _doc_evidence "NAS mount dead"
-        ;;
-    esac
+    if (( deep )); then
+      myvpn_nas_is_alive
+      nas_alive_rc=$?
+      case "$nas_alive_rc" in
+        0) _doc_check "nas_alive" "1" "${MYVPN_NAS_MOUNT} listdir ok" ;;
+        2)
+          _doc_check "nas_alive" "2" "stale mount (timeout) — SMB, не VPN"
+          _doc_evidence "NAS mount stale"
+          ;;
+        *)
+          _doc_check "nas_alive" "2" "mount present but not alive — SMB, не VPN"
+          _doc_evidence "NAS mount dead"
+          ;;
+      esac
+    else
+      nas_alive_rc=0
+      _doc_check "nas_alive" "3" "presence ok (L1 — listdir in --deep)"
+    fi
   else
     if (( home == 0 )); then
       _doc_check "nas_mount" "2" "не смонтирован (ожидаемо: home=0)"
@@ -402,28 +433,35 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     fi
   fi
 
-  # --- rules / config ---
+  # --- rules / config (L2 only — slow/noisy on L1) ---
   local gs_ok=0 gi_ok=0 gs_mtime gi_mtime
-  if [[ -f "${MYVPN_GEOSITE_SRS}" ]]; then
-    gs_ok=1
-    gs_mtime="$(/usr/bin/stat -f '%Sm' -t '%d.%m.%Y, %H:%M' "${MYVPN_GEOSITE_SRS}" 2>/dev/null || true)"
+  if (( deep )); then
+    if [[ -f "${MYVPN_GEOSITE_SRS}" ]]; then
+      gs_ok=1
+      gs_mtime="$(/usr/bin/stat -f '%Sm' -t '%d.%m.%Y, %H:%M' "${MYVPN_GEOSITE_SRS}" 2>/dev/null || true)"
+    fi
+    if [[ -f "${MYVPN_GEOIP_SRS}" ]]; then
+      gi_ok=1
+      gi_mtime="$(/usr/bin/stat -f '%Sm' -t '%d.%m.%Y, %H:%M' "${MYVPN_GEOIP_SRS}" 2>/dev/null || true)"
+    fi
+    _doc_check "geosite-ru" "$gs_ok" "${gs_mtime:-missing}"
+    _doc_check "geoip-ru" "$gi_ok" "${gi_mtime:-missing}"
+  else
+    _doc_check "geosite-ru" "3" "skip L1"
+    _doc_check "geoip-ru" "3" "skip L1"
   fi
-  if [[ -f "${MYVPN_GEOIP_SRS}" ]]; then
-    gi_ok=1
-    gi_mtime="$(/usr/bin/stat -f '%Sm' -t '%d.%m.%Y, %H:%M' "${MYVPN_GEOIP_SRS}" 2>/dev/null || true)"
-  fi
-  _doc_check "geosite-ru" "$gs_ok" "${gs_mtime:-missing}"
-  _doc_check "geoip-ru" "$gi_ok" "${gi_mtime:-missing}"
 
-  if [[ -f "${MYVPN_CONFIG_JSON}" ]]; then
+  if (( deep )) && [[ -f "${MYVPN_CONFIG_JSON}" ]]; then
     if "${MYVPN_SING_BOX}" check -c "${MYVPN_CONFIG_JSON}" >/dev/null 2>&1; then
       _doc_check "config_check" "1" "sing-box check ok"
     else
       _doc_check "config_check" "0" "sing-box check failed"
       _doc_evidence "sing-box check failed"
     fi
-  else
+  elif (( deep )); then
     _doc_check "config_check" "0" "no config json"
+  else
+    _doc_check "config_check" "3" "skip L1"
   fi
 
   if [[ -n "${log_signals}" ]]; then
@@ -602,6 +640,7 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     print -r -- ""
     print -r -- "=== VERDICT ==="
     print -r -- "PRIMARY: ${primary}"
+    print -r -- "LAYER: ${layer}"
     print -r -- "CONFIDENCE: ${confidence}"
     print -r -- "OVERALL: ${overall}  (fail=${fail_show} warn=${warn_show})"
     print -r -- "snapshot: tun=${tun} home=${home} nas=${nas_fast} egress_macbook=${egress_via_macbook} icmp_mb_gw=${macbook_icmp} underlay=${underlay_dead} ip=${pub}"
@@ -658,7 +697,7 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     fi
   fi
   if (( skip_journal == 0 )); then
-    print -r -- "[${stamp}] DOCTOR primary=${primary} overall=${overall} fail=${fail_show} warn=${warn_show}" \
+    print -r -- "[${stamp}] DOCTOR primary=${primary} overall=${overall} fail=${fail_show} warn=${warn_show} layer=${layer}" \
       >> "${drops_log}" 2>/dev/null || true
   fi
   if [[ -f "${drops_log}" ]]; then

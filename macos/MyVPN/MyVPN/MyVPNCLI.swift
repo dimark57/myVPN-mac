@@ -84,9 +84,11 @@ enum MyVPNCLI {
         throw HelperError.notInstalled
     }
 
-    static func mountNAS(force: Bool = false) throws {
+    /// `safe: true` → CLI `--safe` (skip force unmount if volume busy).
+    static func mountNAS(force: Bool = false, safe: Bool = false) throws {
         var args = ["mount-nas"]
         if force { args.append("--force") }
+        if safe { args.append("--safe") }
         let result = try run(args, timeout: 120, quiet: true)
         if result.status != 0 {
             throw MyVPNCLIError.failed(command: "mount-nas", exitCode: result.status, stderr: result.stderr + result.stdout)
@@ -100,11 +102,13 @@ enum MyVPNCLI {
         }
     }
 
-    /// Non-mutating interpretive report. Exit ≠ 0 is OK for WARN/FAIL if latest.txt written.
+    /// L1 triage (default) or L2 `--deep`. Exit ≠ 0 OK for WARN/FAIL if latest.txt written.
     @discardableResult
-    static func doctor() throws -> String {
-        // Full doctor often 45–70s (pings + hub); 60s caused AUTO_DOCTOR timeout noise.
-        let result = try run(["doctor"], timeout: 120, quiet: true)
+    static func doctor(deep: Bool = false) throws -> String {
+        var args = ["doctor"]
+        if deep { args.append("--deep") }
+        let timeout = deep ? AutoDoctor.l2DoctorTimeout : AutoDoctor.l1DoctorTimeout
+        let result = try run(args, timeout: timeout, quiet: true)
         let combined = result.stdout + result.stderr
         let latest = DoctorStatus.latestURL.path
         if FileManager.default.fileExists(atPath: latest) {

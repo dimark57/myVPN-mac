@@ -929,7 +929,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
         root.addArrangedSubview(sectionTitle("Автодоктор"))
         let intro = Self.fillWidthLabel(
-            "При отвале каналов (1→0) — снимок в ~/.cache/myvpn-doctor/ и опционально восстановление. Ручная диагностика всегда доступна.")
+            "FDIR 0.5: L0 полётный журнал → L1 triage (≤8с) → heal с verify. Ручной Off = desired OFF (без auto-heal). Safe Mode останавливает thrash.")
         intro.font = .systemFont(ofSize: 12)
         intro.textColor = .secondaryLabelColor
         root.addArrangedSubview(intro)
@@ -951,6 +951,16 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         autoHealCheck.isEnabled = AutoDoctor.autoDoctorEnabled
         root.addArrangedSubview(autoHealCheck)
 
+        if HealCircuitBreaker.isSafeMode {
+            let safeBtn = NSButton(
+                title: "Выйти из Safe Mode (Resume автоheal)",
+                target: self,
+                action: #selector(resumeSafeModeFromSettings)
+            )
+            safeBtn.bezelStyle = .rounded
+            root.addArrangedSubview(safeBtn)
+        }
+
         let doc = appDelegate?.settingsDoctorStatus() ?? DoctorStatus.load()
         diagStatusLabel = Self.fillWidthLabel(diagStatusText(doc))
         diagStatusLabel.font = .systemFont(ofSize: 13)
@@ -960,13 +970,16 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         btns.orientation = .horizontal
         btns.spacing = 10
         btns.alignment = .centerY
-        diagRunButton = NSButton(title: "Провести диагностику", target: self, action: #selector(runDiagnosticsFromSettings))
+        diagRunButton = NSButton(title: "Провести (L1)", target: self, action: #selector(runDiagnosticsFromSettings))
         diagRunButton.bezelStyle = .rounded
+        let deepBtn = NSButton(title: "Полная (L2)", target: self, action: #selector(runDeepDiagnosticsFromSettings))
+        deepBtn.bezelStyle = .rounded
         diagOpenButton = NSButton(title: "Открыть отчёт", target: self, action: #selector(openDiagnosticsReport))
         diagOpenButton.bezelStyle = .rounded
         diagSendButton = NSButton(title: "Отправить разработчику", target: self, action: #selector(sendDiagnosticsReport))
         diagSendButton.bezelStyle = .rounded
         btns.addArrangedSubview(diagRunButton)
+        btns.addArrangedSubview(deepBtn)
         btns.addArrangedSubview(diagOpenButton)
         btns.addArrangedSubview(diagSendButton)
         let btnSpacer = NSView()
@@ -1031,10 +1044,10 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         guard !prefsBusy else { return }
         prefsBusy = true
         refreshDiagnosticsButtons()
-        setStatus("Диагностика…", ok: true)
+        setStatus("Диагностика L1…", ok: true)
         workQueue.async { [weak self] in
             do {
-                _ = try MyVPNCLI.doctor()
+                _ = try MyVPNCLI.doctor(deep: false)
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.prefsBusy = false
@@ -1053,6 +1066,16 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
                 }
             }
         }
+    }
+
+    @objc private func runDeepDiagnosticsFromSettings() {
+        appDelegate?.settingsRunDoctorDeep()
+        setStatus("L2 запущена — смотри уведомление", ok: true)
+    }
+
+    @objc private func resumeSafeModeFromSettings() {
+        appDelegate?.settingsResumeSafeMode()
+        setStatus("Safe Mode снят", ok: true)
     }
 
     @objc private func openDiagnosticsReport() {
