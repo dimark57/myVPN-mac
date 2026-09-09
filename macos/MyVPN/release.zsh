@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Build myVPN.app.zip and publish GitHub Release (dimark57/myVPN-mac).
 # Does NOT install to ~/Applications — users update via Releases / in-app Update.
+# Does NOT open stage / DerivedData myVPN.app (dual NSStatusItem — closed in 0.5.8).
 # Usage: macos/MyVPN/release.zsh [version]
 # Example: macos/MyVPN/release.zsh 0.3.0
 set -euo pipefail
@@ -24,7 +25,7 @@ STAGE="${TMPDIR:-/tmp}/myvpn-release-$$"
 mkdir -p "${STAGE}"
 trap '/bin/rm -rf "${STAGE}"' EXIT
 
-print -r -- "Building myVPN ${VERSION} → stage (no ~/Applications install)…"
+print -r -- "Building myVPN ${VERSION} → stage (no ~/Applications install, no open)…"
 "${APP_DIR}/build-app.zsh" "${STAGE}"
 
 ZIP="${STAGE}/myVPN.app.zip"
@@ -35,8 +36,22 @@ print -r -- "Publishing ${TAG} → GitHub…"
 gh release create "${TAG}" "${ZIP}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
-  --notes "Menu-bar split-tunnel client. Download myVPN.app.zip → ~/Applications → open. First launch: install helper, import WireGuard profiles. Update: Settings → Update (or auto)." \
+  --notes "$(cat <<EOF
+## myVPN ${VERSION} — single-instance UI
+
+In-app: **Настройки → Update → Проверить обновление**.
+
+### Fix
+- One menu-bar process for \`local.myvpn.mac\` (\`SingleInstance\`)
+- Preferred path \`~/Applications/myVPN.app\` beats DerivedData/stage
+- Update: terminate peer UIs before relaunch; VPN/helper untouched
+- \`UI_LAUNCH\` / \`UI_UPDATE\` in \`drops.log\`
+
+### Do not
+- Open \`DerivedData/.../Release/myVPN.app\` while the menu bar app is running
+EOF
+)" \
   --latest
 
 print -r -- "OK ${TAG} asset myVPN.app.zip"
-print -r -- "На этом Mac: Настройки → Update (или дождись автообновления). Не копируй из stage."
+print -r -- "На этом Mac: Настройки → Update (или дождись автообновления). Не копируй из stage / DerivedData."

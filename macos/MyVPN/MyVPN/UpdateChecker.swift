@@ -146,6 +146,12 @@ enum UpdateChecker {
         try? sign.run()
         sign.waitUntilExit()
 
+        // UI-only handoff (0.5.8): quit other menu-bar processes, then open new binary.
+        // Uses: SingleInstance (not helper/sing-box). Mirror macos/MyVPN/relaunch-ui.zsh peers-first.
+        // `-n` only after peers dead — needed so Launch Services loads disk binary while we still run.
+        let killed = SingleInstance.terminatePeers(timeout: 2.0)
+        DropLogger.logEvent("UI_UPDATE relaunch dest=\(dest.path) killed_peers=\(killed)")
+
         let open = Process()
         open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         open.arguments = ["-n", dest.path]

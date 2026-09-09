@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Build myVPN.app into a stage directory (for release.zsh → GitHub Releases).
 # Does NOT install to ~/Applications — user delivery is only via GitHub Releases.
+# Does NOT open the built app (agents/scripts: never `open` DerivedData or stage UI — 0.5.8).
 #
 # Usage: build-app.zsh <stage-dir>
 #   stage-dir/myVPN.app will be created.
@@ -13,7 +14,7 @@ STAGE="${1:-}"
 
 if [[ -z "${STAGE}" ]]; then
   print -r -- "usage: build-app.zsh <stage-dir>" >&2
-  print -r -- "Builds myVPN.app into stage-dir for packaging. Does not install." >&2
+  print -r -- "Builds myVPN.app into stage-dir for packaging. Does not install or open." >&2
   print -r -- "Users install only from GitHub Releases (see README / release.zsh)." >&2
   exit 2
 fi
@@ -59,3 +60,4 @@ codesign --force --deep --sign - "${DEST}" >/dev/null 2>&1 || true
 
 print -r -- "built ${DEST}"
 print -r -- "runtime embedded → Contents/Resources/runtime"
+print -r -- "NOTE: do not open this app or ${DERIVED}/Build/Products/Release/myVPN.app while menu bar UI is live"

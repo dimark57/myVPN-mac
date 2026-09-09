@@ -31,9 +31,9 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.7 ---
+# --- Info.plist 0.5.8 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.7" ]] && pass "version $ver" || bad "version want 0.5.7 got $ver"
+[[ "$ver" == "0.5.8" ]] && pass "version $ver" || bad "version want 0.5.8 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
@@ -42,9 +42,19 @@ ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/m
 /usr/bin/grep -q 'promptHelperUpgradeIfNeeded' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "helper upgrade prompt" || bad "helper upgrade prompt"
 
 # --- Swift FDIR modules exist ---
-for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoDoctorPipeline WakeRecover; do
+for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoDoctorPipeline WakeRecover SingleInstance; do
   [[ -f "${ROOT}/macos/MyVPN/MyVPN/${f}.swift" ]] && pass "swift $f" || bad "missing $f.swift"
 done
+
+# --- Single-instance 0.5.8 ---
+SI="${ROOT}/macos/MyVPN/MyVPN/SingleInstance.swift"
+/usr/bin/grep -q 'claimOrYield' "${SI}" && pass "SingleInstance claimOrYield" || bad "SingleInstance claimOrYield"
+/usr/bin/grep -q 'UI_LAUNCH' "${SI}" && pass "SingleInstance UI_LAUNCH" || bad "SingleInstance UI_LAUNCH"
+/usr/bin/grep -q 'claimOrYield' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "AppDelegate single-instance guard" || bad "AppDelegate single-instance guard"
+/usr/bin/grep -q 'terminatePeers' "${ROOT}/macos/MyVPN/MyVPN/UpdateChecker.swift" && pass "UpdateChecker terminatePeers" || bad "UpdateChecker terminatePeers"
+/usr/bin/grep -q 'UI_UPDATE' "${ROOT}/macos/MyVPN/MyVPN/UpdateChecker.swift" && pass "UpdateChecker UI_UPDATE" || bad "UpdateChecker UI_UPDATE"
+/usr/bin/grep -q 'Does NOT open' "${ROOT}/macos/MyVPN/build-app.zsh" && pass "build-app no-open" || bad "build-app no-open"
+/usr/bin/grep -q 'Does NOT open' "${ROOT}/macos/MyVPN/release.zsh" && pass "release no-open" || bad "release no-open"
 
 # --- WakeRecover 0.5.6: always remount when channel live ---
 WR="${ROOT}/macos/MyVPN/MyVPN/WakeRecover.swift"

@@ -51,6 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         log("didFinishLaunching bundle=\(Bundle.main.bundlePath)")
+        // Single-instance before status item (0.5.8). Uses: SingleInstance, DropLogger.
+        if !SingleInstance.claimOrYield(sessionCid: sessionCid) {
+            log("single-instance: yield → terminate")
+            NSApp.terminate(nil)
+            return
+        }
         NSApp.setActivationPolicy(.accessory)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 

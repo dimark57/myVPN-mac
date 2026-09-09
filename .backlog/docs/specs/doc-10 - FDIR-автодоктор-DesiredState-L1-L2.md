@@ -3,7 +3,7 @@ id: doc-10
 title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
-target_version: '0.5.7'
+target_version: '0.5.8'
 ---
 
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
@@ -12,6 +12,7 @@ target_version: '0.5.7'
 Цель релиза: **0.5.6** (wake always remount NAS). Dual-WG / `render_config` / NE (doc-5) — **не трогать**.
 Первичный FDIR ship был **0.5.0**; 0.5.4 = channel-first; **0.5.6** = remount NAS даже при L0 `nas=1` (stale SMB).
 **0.5.7** = wake `WAKE_HEAL` только `.restart` (без mount в helper); soft-success если L0 зелёный после timeout helper; `egressDead` = tun && ip пуст && !macbook; `skip=ip_ok_icmp_flap`; `CONFIRM skip=desired_off` + cap confirmCount (нет spam 3/2).
+**0.5.8** = single-instance UI (`SingleInstance`): один `NSStatusItem` на `local.myvpn.mac`; `~/Applications` бьёт DerivedData; update terminate peers before relaunch; `UI_LAUNCH`/`UI_UPDATE` в drops; release/build не `open` stage.
 
 Слоган: DropLogger = симптомы; L1 = дифференциальный диагноз; heal = протокол; Safe Mode = стоп + ground; commanded OFF = DNR.
 

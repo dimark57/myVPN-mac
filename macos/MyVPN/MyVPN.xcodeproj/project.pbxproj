@@ -31,6 +31,7 @@
 		A1000000000000000000005F /* IncidentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006E /* IncidentStore.swift */; };
 		A10000000000000000000070 /* AutoDoctorPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000006F /* AutoDoctorPipeline.swift */; };
 		A10000000000000000000072 /* WakeRecover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000071 /* WakeRecover.swift */; };
+		A10000000000000000000074 /* SingleInstance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000073 /* SingleInstance.swift */; };
 		A1000000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -60,6 +61,7 @@
 		A1000000000000000000006E /* IncidentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000006F /* AutoDoctorPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDoctorPipeline.swift; sourceTree = "<group>"; };
 		A10000000000000000000071 /* WakeRecover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeRecover.swift; sourceTree = "<group>"; };
+		A10000000000000000000073 /* SingleInstance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleInstance.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -109,6 +111,7 @@
 				A1000000000000000000006E /* IncidentStore.swift */,
 				A1000000000000000000006F /* AutoDoctorPipeline.swift */,
 				A10000000000000000000071 /* WakeRecover.swift */,
+				A10000000000000000000073 /* SingleInstance.swift */,
 				A10000000000000000000061 /* StickyMenuItemView.swift */,
 				A10000000000000000000028 /* Assets.xcassets */,
 				A10000000000000000000023 /* Info.plist */,
@@ -212,6 +215,7 @@
 				A1000000000000000000005F /* IncidentStore.swift in Sources */,
 				A10000000000000000000070 /* AutoDoctorPipeline.swift in Sources */,
 				A10000000000000000000072 /* WakeRecover.swift in Sources */,
+				A10000000000000000000074 /* SingleInstance.swift in Sources */,
 				A10000000000000000000052 /* StickyMenuItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
