@@ -100,7 +100,8 @@ enum MyVPNHelper {
         let app = RuntimePaths.appBundleURL.path
         let user = NSUserName()
         let home = NSHomeDirectory()
-        let cmd = "cd / && /bin/zsh \(q(script.path)) install \(q(app)) \(q(user)) \(q(home))"
+        // Paths stay in the temp zsh — AppleScript must not embed shell-quoted paths (0.5.1 -2741).
+        let cmd = "cd / && exec /bin/zsh \(shellQuote(script.path)) install \(shellQuote(app)) \(shellQuote(user)) \(shellQuote(home))"
         try runAdminShell(cmd)
         let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
@@ -114,17 +115,32 @@ enum MyVPNHelper {
         guard let script = RuntimePaths.helperInstallScript else {
             throw HelperError.installFailed("нет install-helper.zsh")
         }
-        try runAdminShell("cd / && /bin/zsh \(q(script.path)) uninstall")
+        try runAdminShell("cd / && exec /bin/zsh \(shellQuote(script.path)) uninstall")
     }
 
-    private static func q(_ s: String) -> String {
+    /// POSIX shell single-quote (for zsh body only — not AppleScript).
+    private static func shellQuote(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    /// Run `cmd` as root via osascript. Uses a temp .zsh so AppleScript only sees /var/folders ASCII.
     private static func runAdminShell(_ cmd: String) throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("myvpn-admin-\(UUID().uuidString).zsh")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let body = "#!/bin/zsh\nset -euo pipefail\n\(cmd)\n"
+        try body.write(to: tmp, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmp.path)
+
+        // AppleScript string = double quotes; quoted form of handles spaces in tmp path.
+        let asPath = tmp.path
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let apple = "do shell script \"/bin/zsh \" & quoted form of \"\(asPath)\" with administrator privileges"
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", "do shell script \(q(cmd)) with administrator privileges"]
+        process.arguments = ["-e", apple]
         let err = Pipe()
         let out = Pipe()
         process.standardError = err
