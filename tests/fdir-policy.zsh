@@ -31,9 +31,15 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.4 ---
+# --- Info.plist 0.5.5 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.4" ]] && pass "version $ver" || bad "version want 0.5.4 got $ver"
+[[ "$ver" == "0.5.5" ]] && pass "version $ver" || bad "version want 0.5.5 got $ver"
+
+
+# --- helper protocol 2 (app + daemon) ---
+/usr/bin/grep -q 'HELPER_PROTO = 2' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper HELPER_PROTO=2" || bad "helper HELPER_PROTO=2"
+/usr/bin/grep -q 'requiredProtocol = 2' "${ROOT}/macos/MyVPN/MyVPN/MyVPNHelper.swift" && pass "app requiredProtocol=2" || bad "app requiredProtocol=2"
+/usr/bin/grep -q 'promptHelperUpgradeIfNeeded' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "helper upgrade prompt" || bad "helper upgrade prompt"
 
 # --- Swift FDIR modules exist ---
 for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoDoctorPipeline WakeRecover; do

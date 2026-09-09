@@ -18,6 +18,8 @@ HOME = os.environ.get("HOME", "")
 MYVPN_ROOT = os.environ.get("MYVPN_ROOT", "")
 LOG_PATH = os.environ.get("MYVPN_HELPER_LOG", "/var/log/myvpn-helper.log")
 CMD_TIMEOUT = float(os.environ.get("MYVPN_HELPER_TIMEOUT", "45"))
+# Bump when allowed commands / behavior change — app prompts reinstall if running proto < required.
+HELPER_PROTO = 2
 
 _lock = threading.Lock()
 
@@ -84,6 +86,8 @@ def handle(cmd: str) -> str:
     cmd = cmd.strip().lower()
     if cmd == "ping":
         return "ok ready"
+    if cmd in ("proto", "version"):
+        return f"ok proto={HELPER_PROTO}"
     if cmd in ("up", "down", "pin-endpoints"):
         with _lock:
             code, detail = run_myvpn(cmd)

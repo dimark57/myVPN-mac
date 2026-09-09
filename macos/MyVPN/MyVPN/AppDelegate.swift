@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var autostartOn = false
     private var autoNASOn = false
     private var helperOn = false
+    private var helperStale = false
+    private var helperUpgradePromptShown = false
     private var pidDirWatcher: DispatchSourceFileSystemObject?
     private var pidWatchDebounce: DispatchWorkItem?
     private let workQueue = DispatchQueue(label: "local.myvpn.mac.cli", qos: .userInitiated)
@@ -95,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // App updates: on launch (after VPN settle) + every hour; auto-install if newer.
         DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
             self?.runAutoUpdate(reason: "launch")
+        }
+        // Helper protocol bump (pin-endpoints etc.) — alert once if daemon older than app.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            self?.promptHelperUpgradeIfNeeded()
         }
         updateTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             self?.runAutoUpdate(reason: "hourly")
@@ -298,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ))
         }
 
-        // Helper only when missing / broken
+        // Helper missing / broken / outdated protocol
         if !helperOn {
             let title = MyVPNHelper.filesPresent
                 ? "Переустановить помощника"
@@ -308,6 +314,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 title: title,
                 enabled: actionEnabled("helper-install"),
                 detail: MyVPNHelper.filesPresent ? "нет socket" : nil,
+                checked: nil,
+                action: { [weak self] in self?.installHelper() }
+            ))
+        } else if helperStale {
+            slots.append(.sticky(
+                key: "helper-install",
+                title: "Обновить помощника…",
+                enabled: actionEnabled("helper-install"),
+                detail: "устарел",
                 checked: nil,
                 action: { [weak self] in self?.installHelper() }
             ))
@@ -757,9 +772,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func installHelper() {
         runCommand(key: "helper-install", work: "Устанавливаю помощник…") {
             try MyVPNHelper.install()
+            MyVPNHelper.clearDismissedUpgrade()
         } afterSuccess: { [weak self] in
             self?.refreshPrefs()
-            self?.notify(title: "myVPN ✓ Помощник", body: "Установлен — Вкл/Выкл без пароля · \(DoctorStatus.nowStamp())", replacing: "helper-install")
+            self?.notify(
+                title: "myVPN ✓ Помощник",
+                body: "Обновлён (proto \(MyVPNHelper.requiredProtocol)) · \(DoctorStatus.nowStamp())",
+                replacing: "helper-install"
+            )
+        }
+    }
+
+    /// NSAlert when LaunchDaemon protocol < app required (after Update without helper reinstall).
+    private func promptHelperUpgradeIfNeeded() {
+        guard !helperUpgradePromptShown, !isBusy else { return }
+        workQueue.async { [weak self] in
+            let stale = MyVPNHelper.needsReinstall
+            let dismissed = MyVPNHelper.dismissedUpgradeForCurrentProto
+            DispatchQueue.main.async {
+                guard let self, stale, !dismissed, !self.helperUpgradePromptShown else { return }
+                self.helperUpgradePromptShown = true
+                self.helperStale = true
+                if self.menuIsOpen { self.rebuildMenu() }
+
+                let alert = NSAlert()
+                alert.messageText = "Обновить системный помощник?"
+                alert.informativeText =
+                    "После обновления myVPN помощник устарел (нужны новые команды). VPN можно не выключать. Один пароль администратора."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "Переустановить сейчас")
+                alert.addButton(withTitle: "Позже")
+                NSApp.activate(ignoringOtherApps: true)
+                let choice = alert.runModal()
+                if choice == .alertFirstButtonReturn {
+                    self.installHelper()
+                } else {
+                    MyVPNHelper.dismissedUpgradeForCurrentProto = true
+                }
+            }
         }
     }
 
@@ -1086,6 +1136,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         autostartOn = MyVPNCLI.autostartEnabled() || LoginItemController.isEnabled
         autoNASOn = MyVPNCLI.autoNASEnabled()
         helperOn = MyVPNCLI.helperInstalled()
+        // Proto check is sync socket I/O — keep off main if menu spam; cache via workQueue when stale unknown.
+        if helperOn {
+            workQueue.async { [weak self] in
+                let stale = MyVPNHelper.needsReinstall
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    let changed = self.helperStale != stale
+                    self.helperStale = stale
+                    if changed, self.menuIsOpen { self.rebuildMenu() }
+                }
+            }
+        } else {
+            helperStale = false
+        }
         if menuIsOpen {
             rebuildMenu()
         }

@@ -807,8 +807,16 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
 
     private func refreshHelperPane() {
         let ok = MyVPNCLI.helperInstalled()
-        if ok {
-            helperStatusLabel?.stringValue = "Статус: установлен · socket OK"
+        let stale = ok && MyVPNHelper.needsReinstall
+        if ok, stale {
+            let running = MyVPNHelper.runningProtocol().map(String.init) ?? "?"
+            helperStatusLabel?.stringValue =
+                "Статус: установлен · устарел (proto \(running) < \(MyVPNHelper.requiredProtocol)) — переустанови"
+            helperStatusLabel?.textColor = .systemOrange
+            helperActionButton?.title = "Переустановить…"
+            helperUninstallButton?.isEnabled = !prefsBusy
+        } else if ok {
+            helperStatusLabel?.stringValue = "Статус: установлен · socket OK · proto \(MyVPNHelper.requiredProtocol)"
             helperStatusLabel?.textColor = .secondaryLabelColor
             helperActionButton?.title = "Переустановить…"
             helperUninstallButton?.isEnabled = !prefsBusy
@@ -834,6 +842,7 @@ final class ConnectionSettingsWindowController: NSWindowController, NSWindowDele
         workQueue.async { [weak self] in
             do {
                 try MyVPNHelper.install()
+                MyVPNHelper.clearDismissedUpgrade()
                 DispatchQueue.main.async {
                     self?.prefsBusy = false
                     self?.refreshHelperPane()

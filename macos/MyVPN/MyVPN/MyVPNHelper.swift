@@ -6,6 +6,11 @@ enum MyVPNHelper {
     static let supportBin = "/Library/Application Support/myVPN/myvpn-helper"
     static let launchPlist = "/Library/LaunchDaemons/local.myvpn.mac.helper.plist"
 
+    /// Must match HELPER_PROTO in myvpn_helperd.py (bump together when commands change).
+    static let requiredProtocol = 2
+
+    private static let dismissedProtoKey = "local.myvpn.mac.helper.dismissedProto"
+
     static var isAvailable: Bool {
         var st = stat()
         guard stat(sockPath, &st) == 0 else { return false }
@@ -16,6 +21,51 @@ enum MyVPNHelper {
     static var filesPresent: Bool {
         let fm = FileManager.default
         return fm.fileExists(atPath: supportBin) || fm.fileExists(atPath: launchPlist)
+    }
+
+    /// Running daemon protocol, or nil if socket down / unknown.
+    static func runningProtocol() -> Int? {
+        guard isAvailable else { return nil }
+        do {
+            let text = try send("proto", timeout: 3)
+            // "ok proto=2"
+            if let range = text.range(of: "proto=") {
+                let n = text[range.upperBound...]
+                    .prefix(while: { $0.isNumber })
+                return Int(n)
+            }
+            return nil
+        } catch {
+            // Old helpers: "unknown command" → treat as proto 1 (up/down only).
+            let msg = error.localizedDescription.lowercased()
+            if msg.contains("unknown") {
+                return 1
+            }
+            return nil
+        }
+    }
+
+    /// Socket OK but daemon older than this app build (e.g. missing pin-endpoints).
+    static var needsReinstall: Bool {
+        guard isAvailable else { return false }
+        guard let running = runningProtocol() else { return false }
+        return running < requiredProtocol
+    }
+
+    /// User said «Позже» for this requiredProtocol — don't auto-alert again until bump.
+    static var dismissedUpgradeForCurrentProto: Bool {
+        get { UserDefaults.standard.integer(forKey: dismissedProtoKey) >= requiredProtocol }
+        set {
+            if newValue {
+                UserDefaults.standard.set(requiredProtocol, forKey: dismissedProtoKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: dismissedProtoKey)
+            }
+        }
+    }
+
+    static func clearDismissedUpgrade() {
+        UserDefaults.standard.removeObject(forKey: dismissedProtoKey)
     }
 
     /// Login Item often starts before LaunchDaemon creates the socket — wait instead of giving up.
