@@ -43,18 +43,16 @@ gh release create "${TAG}" "${ZIP}" "${SHA}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
   --notes "$(cat <<EOF
-## myVPN ${VERSION} — observability
+## myVPN ${VERSION} — auto-heal soft-success
 
 In-app: **Настройки → Update → Проверить обновление**.
 
-### What
-- \`UI_CMD\` in \`drops.log\` (on/off/mount/doctor/update/helper)
-- Helper logs \`forbidden peer_uid=\` on socket ACL deny
-- Doctor L1: \`helper_proto\` check
-- Update verifies \`myVPN.app.zip.sha256\` before install (mismatch → abort, no open)
+### Fix
+- Pipeline \`AUTO_HEAL\`: helper timeout / verify lag while L0 green → \`ok=1 soft=1\` (no false ✕ / Safe Mode tick)
+- Shared \`AutoDoctor.isSoftHealOK\` (wake path uses the same)
 
 ### Note
-Helper daemon log is \`/var/log/myvpn-helper.log\` (forbidden lines). Reinstall helper only if proto bumps.
+Checksum asset \`myVPN.app.zip.sha256\` included (0.5.9+).
 EOF
 )" \
   --latest

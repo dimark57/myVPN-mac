@@ -241,6 +241,22 @@ enum AutoDoctor {
         }
     }
 
+    /// L0 soft-success after helper timeout / strict verify lag (0.5.7 wake, 0.5.10 pipeline).
+    /// Uses: MyVPNCLI.status — tun live and (public IP or macbook ICMP).
+    static func isSoftHealOK(kind: HealKind, snap: StatusSnapshot? = nil) -> Bool {
+        let s = snap ?? MyVPNCLI.status(includePublicIP: isRestartKind(kind) || kind == .up)
+        switch kind {
+        case .up, .restart, .restartAndMount:
+            return s.tun && (!s.ip.isEmpty || s.macbook)
+        case .mountNAS:
+            return s.nas
+        case .flushDNS:
+            return s.tun
+        case .none:
+            return true
+        }
+    }
+
     static func kindLabel(_ kind: HealKind) -> String {
         switch kind {
         case .up: return "up"

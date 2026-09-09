@@ -175,9 +175,8 @@ enum WakeRecover {
         }
 
         DesiredStateStore.setDesiredOn()
-        // Soft-success: helper may timeout (45s) after tunnel is already green (0.5.7).
-        let snap = MyVPNCLI.status(includePublicIP: true)
-        let softOK = snap.tun && (!snap.ip.isEmpty || snap.macbook)
+        // Soft-success: helper may timeout (45s) after tunnel is already green (0.5.7 / shared 0.5.10).
+        let softOK = AutoDoctor.isSoftHealOK(kind: kind)
 
         if softOK {
             AutoDoctor.recordHeal(kind: kind, primary: primary, verified: true)

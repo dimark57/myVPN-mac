@@ -147,20 +147,28 @@ enum AutoDoctorPipeline {
                 }
 
                 do {
-                    try AutoDoctor.performHeal(kind)
+                    var healError: String?
+                    do {
+                        try AutoDoctor.performHeal(kind)
+                    } catch {
+                        healError = error.localizedDescription
+                    }
                     DesiredStateStore.setDesiredOn()
-                    let verified = AutoDoctor.verifyAfterHeal(kind: kind)
-                    if verified {
+                    let verified = healError == nil && AutoDoctor.verifyAfterHeal(kind: kind)
+                    let softOK = AutoDoctor.isSoftHealOK(kind: kind)
+                    // Soft-success (0.5.10): helper timeout / verify lag while L0 already green — same as wake 0.5.7.
+                    if verified || softOK {
                         AutoDoctor.recordHeal(kind: kind, primary: primary, verified: true)
+                        let softTag = (!verified || healError != nil) ? " soft=1" : ""
                         DropLogger.logEvent(
-                            "AUTO_HEAL ok=1 verify=1 action=\(AutoDoctor.kindLabel(kind)) primary=\(primary)\(followUp ? " follow-up=1" : "")"
+                            "AUTO_HEAL ok=1 verify=\(verified ? 1 : 0)\(softTag) action=\(AutoDoctor.kindLabel(kind)) primary=\(primary)\(followUp ? " follow-up=1" : "")\(healError.map { " err=\($0)" } ?? "")"
                         )
                         IncidentStore.attachHeal(
                             cid: event.cid,
                             attempted: true,
                             ok: 1,
                             action: AutoDoctor.kindLabel(kind),
-                            skipped: nil
+                            skipped: softTag.isEmpty ? nil : "soft"
                         )
                         DispatchQueue.main.async {
                             callbacks.onNotify(
@@ -173,15 +181,16 @@ enum AutoDoctorPipeline {
                         }
                     } else {
                         HealCircuitBreaker.recordVerifyFail()
+                        let msg = healError ?? "verify_fail"
                         DropLogger.logEvent(
-                            "AUTO_HEAL ok=0 verify=0 action=\(AutoDoctor.kindLabel(kind)) primary=\(primary)"
+                            "AUTO_HEAL ok=0 verify=0 action=\(AutoDoctor.kindLabel(kind)) primary=\(primary) err=\(msg)"
                         )
                         IncidentStore.attachHeal(
                             cid: event.cid,
                             attempted: true,
                             ok: 0,
                             action: AutoDoctor.kindLabel(kind),
-                            skipped: "verify_fail"
+                            skipped: msg
                         )
                         DispatchQueue.main.async {
                             let title = HealCircuitBreaker.isSafeMode
@@ -189,30 +198,11 @@ enum AutoDoctorPipeline {
                                 : "myVPN ✕ Verify"
                             let body = HealCircuitBreaker.isSafeMode
                                 ? "Автоheal остановлен — Resume в Настройки · \(DoctorStatus.nowStamp())"
-                                : "Heal выполнился, data-plane ещё мёртв · \(DoctorStatus.nowStamp())"
+                                : "\(msg) · \(DoctorStatus.nowStamp())"
                             callbacks.onNotify(title, body, "auto-heal")
                             finish(callbacks: callbacks)
                             callbacks.onRefresh(true)
                         }
-                    }
-                } catch {
-                    HealCircuitBreaker.recordVerifyFail()
-                    DropLogger.logEvent("AUTO_HEAL ok=0 action=\(AutoDoctor.kindLabel(kind)) err=\(error.localizedDescription)")
-                    IncidentStore.attachHeal(
-                        cid: event.cid,
-                        attempted: true,
-                        ok: 0,
-                        action: AutoDoctor.kindLabel(kind),
-                        skipped: error.localizedDescription
-                    )
-                    DispatchQueue.main.async {
-                        callbacks.onNotify(
-                            "myVPN ✕ Автовосстановление",
-                            error.localizedDescription,
-                            "auto-heal"
-                        )
-                        finish(callbacks: callbacks)
-                        callbacks.onRefresh(false)
                     }
                 }
             } catch {
