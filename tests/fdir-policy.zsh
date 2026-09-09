@@ -31,9 +31,9 @@ if [[ -f "${HOME}/.cache/myvpn-doctor/drops.log" ]]; then
   fi
 fi
 
-# --- Info.plist 0.5.12 ---
+# --- Info.plist 0.5.13 ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.12" ]] && pass "version $ver" || bad "version want 0.5.12 got $ver"
+[[ "$ver" == "0.5.13" ]] && pass "version $ver" || bad "version want 0.5.13 got $ver"
 
 
 # --- helper protocol 2 (app + daemon) ---
@@ -45,6 +45,13 @@ ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/m
 for f in DesiredStateStore HealCircuitBreaker FlightRecorder IncidentStore AutoDoctorPipeline WakeRecover SingleInstance; do
   [[ -f "${ROOT}/macos/MyVPN/MyVPN/${f}.swift" ]] && pass "swift $f" || bad "missing $f.swift"
 done
+
+# --- Fast up 0.5.13 ---
+/usr/bin/grep -q 'MYVPN_SKIP_AUTO_NAS' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper SKIP_AUTO_NAS" || bad "helper SKIP_AUTO_NAS"
+/usr/bin/grep -q 'MYVPN_QUIET' "${ROOT}/bin/myvpn" && pass "bin/myvpn QUIET skip auto-nas" || bad "bin/myvpn QUIET skip auto-nas"
+/usr/bin/grep -q 'myvpn_cmd_mount_nas --safe' "${ROOT}/lib/nas.zsh" && pass "after_up --safe only" || bad "after_up --safe only"
+/usr/bin/grep -q 'UI_MOUNT skip=already_mounted' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI skip mount if live" || bad "UI skip mount if live"
+/usr/bin/grep -q 'timeout: 50' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI up watchdog 50s" || bad "UI up watchdog 50s"
 
 # --- Live menu status 0.5.12 ---
 /usr/bin/grep -q 'nasInMountTable\|nasMounted(at:' "${ROOT}/macos/MyVPN/MyVPN/StatusSnapshot.swift" && pass "NAS mount-table probe" || bad "NAS mount-table probe"

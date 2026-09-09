@@ -184,6 +184,6 @@ myvpn_after_up_remount_nas() {
     return 0
   fi
   print -r -- "auto-nas: remount after vpn up"
-  # --safe: never force-unmount under live IDE/Cursor on /Volumes/Nas (doc-10).
-  myvpn_cmd_mount_nas --force --safe || true
+  # --safe only (no blind --force): alive mount = instant no-op; stale remounts unless BUSY.
+  myvpn_cmd_mount_nas --safe || true
 }

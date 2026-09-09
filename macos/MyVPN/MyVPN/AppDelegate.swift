@@ -583,13 +583,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DropLogger.logEvent("UI_CMD on")
         DesiredStateStore.setDesiredOn()
         HealCircuitBreaker.resume(reason: "user_on")
-        runCommand(key: "up", work: "Включаю VPN", timeout: 35) {
+        // Helper CMD_TIMEOUT=45; keep UI watchdog ≥ that (0.5.13).
+        runCommand(key: "up", work: "Включаю VPN", timeout: 50) {
             try MyVPNCLI.up()
         } afterSuccess: { [weak self] in
             guard let self else { return }
             DesiredStateStore.setDesiredOn()
             if self.autoNASOn {
-                // Helper up bypasses CLI remount hook — remount as a visible second phase.
+                let live = MyVPNCLI.status(includePublicIP: false)
+                if live.nas {
+                    self.snapshot = live
+                    DropLogger.logEvent("UI_MOUNT skip=already_mounted after=up")
+                    self.notify(
+                        title: "myVPN ✓ Готово",
+                        body: "VPN включён, NAS смонтирован · \(DoctorStatus.nowStamp())",
+                        replacing: "up"
+                    )
+                    if self.menuIsOpen { self.rebuildMenu() }
+                    return
+                }
+                // Helper up is tunnel-only — remount as a visible second phase.
                 self.runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
                     try MyVPNCLI.mountNAS(force: false, safe: true)
                 } afterSuccess: { [weak self] in
@@ -1004,7 +1017,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.notify(title: "myVPN", body: "Монтирую NAS · \(DoctorStatus.nowStamp())", replacing: "auto-nas")
                         if self.menuIsOpen { self.rebuildMenu() }
                     }
-                    try? MyVPNCLI.mountNAS(force: true, safe: true)
+                    try? MyVPNCLI.mountNAS(force: false, safe: true)
                 }
                 let final = MyVPNCLI.status(includePublicIP: true)
                 DispatchQueue.main.async {

@@ -264,8 +264,12 @@ main() {
         myvpn_cmd_up "$@"
         up_rc=$?
       fi
-      # Menu bar uses helper socket directly — same remount also in AppDelegate.turnOn.
-      if (( up_rc == 0 && was_up == 0 )); then
+      # Menu bar → helper socket: remount in AppDelegate (turnOn / auto-up).
+      # Nested helper `myvpn up` has MYVPN_QUIET=1 — skip auto-nas so up stays tunnel-only (~сек, не 30–45).
+      # Plain CLI `myvpn up` (no QUIET on outer) still remounts after helper returns.
+      if (( up_rc == 0 && was_up == 0 )) \
+        && [[ -z "${MYVPN_SKIP_AUTO_NAS:-}" ]] \
+        && [[ -z "${MYVPN_QUIET:-}" ]]; then
         myvpn_after_up_remount_nas
       fi
       return "${up_rc}"

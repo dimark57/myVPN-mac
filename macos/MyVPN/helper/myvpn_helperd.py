@@ -59,6 +59,8 @@ def run_myvpn(action: str) -> tuple[int, str]:
     env["USER"] = OWNER
     env["LOGNAME"] = OWNER
     env["MYVPN_QUIET"] = "1"
+    # Menu/AppDelegate remounts NAS after up — nested auto-nas here made up take 30–45s.
+    env["MYVPN_SKIP_AUTO_NAS"] = "1"
     env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     t0 = time.monotonic()
     log(f"begin {action}")

@@ -41,14 +41,14 @@ gh release create "${TAG}" "${ZIP}" "${SHA}" \
   --repo dimark57/myVPN-mac \
   --title "myVPN ${VERSION}" \
   --notes "$(cat <<EOF
-## myVPN ${VERSION} — live menu status
+## myVPN ${VERSION} — fast on/off
 
 In-app: **Настройки → Update** (or auto).
 
 ### Fix
-- NAS status SoT = \`/sbin/mount\` table (no hanging SMB \`fileExists\`)
-- Menu refreshes every ~2s while open; rebuilds during mount/up busy
-- Mount UI timeout + volume already live → soft success (\`UI_MOUNT soft=1\`), not ✕
+- Helper \`up\` no longer runs nested auto-nas (was 30–45s \`wait_host\` / force remount)
+- \`after_up\` is \`mount-nas --safe\` only (alive mount = instant)
+- UI skips second mount if NAS already live; up watchdog 50s
 EOF
 )" \
   --latest
