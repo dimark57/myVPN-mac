@@ -18,7 +18,7 @@ card: MYMAC-6
 
 В Utilits отлажен полный цикл для brew `macbook+home`:
 
-`/Users/dmitrijstolarov/Documents/Utilits/local/alfred/wireguard/cycle-macbook-home.zsh`
+`~/Documents/Utilits/local/alfred/wireguard/cycle-macbook-home.zsh`
 
 Отчёт: `~/.cache/utilits-wg-cycle/latest.txt` (эталон PASS: 13 checks, Hub 200, DNS `10.57.0.100`, IP `77…`, restore WireGuard.app).
 

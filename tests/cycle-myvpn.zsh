@@ -161,7 +161,7 @@ stop_wireguard_apps() {
 
 # Legacy brew utun cleanup if still present
 stop_brew_wg() {
-  local apply="/Users/dmitrijstolarov/Documents/Utilits/local/alfred/wireguard/apply-wg.zsh"
+  local apply="${HOME}/Documents/Utilits/local/alfred/wireguard/apply-wg.zsh"
   if [[ -x "$apply" ]] && { has_inet "10.8.0.3" || has_inet "10.13.13.2"; } && ! myvpn_tun_up; then
     /bin/zsh "$apply" brew-down >> "${REPORT_FILE}" 2>&1 || true
   fi

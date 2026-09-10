@@ -186,7 +186,13 @@ struct StatusSnapshot: Equatable, Sendable {
     private static func publicIP() -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-        p.arguments = ["-4", "-sS", "--max-time", "2", "https://ifconfig.me"]
+        // connect-timeout: fail fast on blackhole; matches lib/process.zsh (doc-12).
+        p.arguments = [
+            "-4", "-sS",
+            "--connect-timeout", "1",
+            "--max-time", "2",
+            "https://ifconfig.me",
+        ]
         let out = Pipe()
         p.standardOutput = out
         p.standardError = FileHandle.nullDevice

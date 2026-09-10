@@ -11,7 +11,7 @@ milestone: m-0
 dependencies: []
 references:
   - .backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
+  - .backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
 documentation:
   - doc-4
 - doc-4 — Menu bar myVPN

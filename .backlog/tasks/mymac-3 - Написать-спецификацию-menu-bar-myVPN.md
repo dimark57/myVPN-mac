@@ -14,7 +14,7 @@ documentation:
   - doc-4
 priority: medium
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
+  - .backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
 ---
 ## Description
 
@@ -81,7 +81,7 @@ references:
   "refs": [
     {
       "role": "spec",
-      "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs",
+      "path": ".backlog/docs/specs",
       "doc": "doc-4 — Menu bar myVPN"
     }
   ],

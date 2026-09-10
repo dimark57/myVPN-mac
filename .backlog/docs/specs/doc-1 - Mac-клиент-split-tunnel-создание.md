@@ -9,14 +9,14 @@ updated_date: '2026-09-07 13:00'
 
 Личный клиент на macOS: два WireGuard (MacBook + Home), российские ресурсы **напрямую**, остальной интернет через MacBook, DNS как у Happ (по доменам).
 
-Это **не** you2vpn.ru (Laravel, биллинг, ноды). Продукт you2vpn: `/Volumes/Nas/Project/myVPN` (`BACK-*`). Этот репо — только Mac-клиент (`MYMAC-*`).
+Это **не** you2vpn.ru (Laravel, биллинг, ноды). Продукт you2vpn: `myVPN` (`BACK-*`). Этот репо — только Mac-клиент (`MYMAC-*`).
 
 ## Каталоги
 
 | Путь | Роль |
 |------|------|
-| `/Volumes/Nas/Project/myVPN` | you2vpn: сайт, API, воркеры |
-| `/Volumes/Nas/Project/myVPN-mac` | этот репо: sing-box, CLI, позже menu bar |
+| `myVPN` (you2vpn) | сайт, API, воркеры — другой дом |
+| `.` | этот репо: sing-box, CLI, menu bar |
 | Utilits `local/alfred/wireguard` | Keyword **`gv`**: статус / up / down |
 
 Секреты WG: `~/.config/wireguard/*.conf` или `~/.config/myvpn/` — не в git.

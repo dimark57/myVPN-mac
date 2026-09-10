@@ -1,10 +1,10 @@
 # myVPN-mac — AGENTS
 
-Prefix: `MYMAC` · Role: personal → public-ready · Contour: `/Volumes/Nas/Project/myVPN-mac/`  
+Prefix: `MYMAC` · Role: personal → public-ready · Contour: `.` (этот репо)  
 GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)  
 **CD recipe: macos-gh-app**
 
-Клиент split-tunnel на macOS (sing-box + два WG). **Не** продукт you2vpn (`/Project/myVPN`, prefix `BACK`).
+Клиент split-tunnel на macOS (sing-box + два WG). **Не** продукт you2vpn (`myVPN`, prefix `BACK`).
 
 ## Документация (два слоя)
 
@@ -13,7 +13,7 @@ GitHub: `dimark57/myVPN-mac` (Releases = in-app updates)
 | Пользователи приложения | `README.md` только (install / update / configure) |
 | Агенты + разработчики | этот файл + `.backlog/docs/specs/` — решения сразу в **doc-8** |
 
-Спеки: doc-1 продукт, doc-2 ядро, doc-3 Alfred, doc-4 menu bar, doc-5 NE, doc-6 тесты, doc-7 RU UX, **doc-8 публичная дистрибуция**.
+Спеки: doc-1 продукт, doc-2 ядро, doc-3 Alfred, doc-4 menu bar, doc-5 NE, doc-6 тесты, doc-7 RU UX, **doc-8 публичная дистрибуция**, doc-11/12 FDIR.
 
 ## Задачи
 
@@ -43,5 +43,5 @@ Keyword `gv` живёт в **Utilits**. Этот репо — ядро/CLI/app.
 
 ## Навыки
 
-Территория: `/Volumes/Nas/Project/mySkills/skills/` — не копировать в дом.  
+Территория: соседний дом `mySkills/skills/` — не копировать в этот репо.  
 Ship/катим → навык **`cd`** (`macos-gh-app`), не ad-hoc субагент с retag.

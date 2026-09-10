@@ -14,7 +14,7 @@ documentation:
   - doc-6
 priority: high
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-6 - Тестирование-CLI-myvpn.md
+  - .backlog/docs/specs/doc-6 - Тестирование-CLI-myvpn.md
 ---
 ## Description
 
@@ -82,7 +82,7 @@ references:
   "refs": [
     {
       "role": "spec",
-      "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs",
+      "path": ".backlog/docs/specs",
       "doc": "doc-6 — Тестирование CLI myvpn"
     }
   ],

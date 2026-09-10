@@ -6,7 +6,8 @@ set -euo pipefail
 PATCH_ROOT="${0:A:h}"
 FILES="${PATCH_ROOT}/files"
 SRC_TREE="${HOME}/.local/share/myvpn/macos-src"
-NAS_REPO="/Volumes/Nas/Project/myVPN-mac"
+# Repo root (was hardcoded NAS path). Sync back into this checkout when present.
+REPO_ROOT="$(git -C "${PATCH_ROOT}" rev-parse --show-toplevel 2>/dev/null || true)"
 DEST="${HOME}/Applications/myVPN.app"
 
 [[ -f "${FILES}/AppDelegate.swift" && -f "${FILES}/StatusSnapshot.swift" ]] || {
@@ -104,13 +105,13 @@ exit 1
 
 # /bin/zsh "${SRC_TREE}/install-app.zsh"
 
-# Best-effort sync patched Swift back to NAS repo when mounted.
-if [[ -d "${NAS_REPO}/macos/MyVPN/MyVPN" ]]; then
-  print -r -- "== sync → NAS repo =="
-  /bin/cp -f "${FILES}/AppDelegate.swift" "${NAS_REPO}/macos/MyVPN/MyVPN/AppDelegate.swift" || true
-  /bin/cp -f "${FILES}/StatusSnapshot.swift" "${NAS_REPO}/macos/MyVPN/MyVPN/StatusSnapshot.swift" || true
+# Best-effort sync patched Swift back into this git checkout.
+if [[ -n "${REPO_ROOT}" && -d "${REPO_ROOT}/macos/MyVPN/MyVPN" ]]; then
+  print -r -- "== sync → repo =="
+  /bin/cp -f "${FILES}/AppDelegate.swift" "${REPO_ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" || true
+  /bin/cp -f "${FILES}/StatusSnapshot.swift" "${REPO_ROOT}/macos/MyVPN/MyVPN/StatusSnapshot.swift" || true
 else
-  print -r -- "(NAS repo not mounted — skip sync; local tree is SoT until remount)"
+  print -r -- "(repo root not found — skip sync; local macos-src is SoT)"
 fi
 
 print -r -- "== launch =="

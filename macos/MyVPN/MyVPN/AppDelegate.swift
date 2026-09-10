@@ -1279,12 +1279,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else if includePublicIP, !next.ip.isEmpty {
                     self.egressEmptyStreak = 0
                 }
+                let prevSnap = self.snapshot
                 let changed = self.snapshot != next
                 self.snapshot = next
                 FlightRecorder.append(sample: next, sessionCid: self.sessionCid, pubEmpty: pubEmptyProbe)
                 if let drop = DropLogger.observe(next) {
                     self.handleChannelDrop(drop)
                 }
+                self.maybeRemountNASAfterFlap(from: prevSnap, to: next)
                 self.applyIcon()
                 // Rebuild even while busy so «Монтирую…» / NAS badge track reality (0.5.12).
                 if self.menuIsOpen, changed {
@@ -1336,6 +1338,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
+    /// doc-12 / 0.5.19: NAS 1→0 is no longer hard DROP. Remount only — never down→up.
+    private func maybeRemountNASAfterFlap(from prev: StatusSnapshot, to next: StatusSnapshot) {
+        guard prev.nas, !next.nas else { return }
+        guard DesiredStateStore.desiredOn, !DesiredStateStore.isInGrace else { return }
+        guard next.tun else { return }
+        guard AutoDoctor.autoHealEnabled else { return }
+        guard !autoDoctorInFlight else {
+            DropLogger.logEvent("HEAL_NAS skip=doctor_in_flight")
+            return
+        }
+        let kind = AutoDoctor.HealKind.mountNAS
+        let gate = AutoDoctor.canHealNow(primary: "NAS_MOUNT_ONLY", kind: kind)
+        guard gate.ok else {
+            DropLogger.logEvent("HEAL_NAS skip=\(gate.reason ?? "gate") flap=1")
+            return
+        }
+        DropLogger.logEvent("HEAL_NAS flap=1 action=mount-nas --safe")
+        workQueue.async { [weak self] in
+            do {
+                try AutoDoctor.performHeal(kind)
+                let ok = AutoDoctor.verifyAfterHeal(kind: kind) || AutoDoctor.isSoftHealOK(kind: kind)
+                AutoDoctor.recordHeal(kind: kind, primary: "NAS_MOUNT_ONLY", verified: ok)
+                DropLogger.logEvent("HEAL_NAS ok=\(ok ? 1 : 0) flap=1")
+            } catch {
+                DropLogger.logEvent("HEAL_NAS ok=0 err=\(error.localizedDescription) flap=1")
+            }
+            DispatchQueue.main.async {
+                self?.refreshStatus(includePublicIP: false)
+            }
+        }
+    }
+
     private func finishAutoDoctor(outcome: String, cid: String) {
         autoDoctorInFlight = false
         if busyKey == "auto-doctor" || busyKey == "auto-heal" {
@@ -1349,7 +1383,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Pipeline exit without successful heal + L0 red → one `.restart` after 60s, 1× per cid.
     private func armWatchdogIfNeeded(outcome: String, cid: String) {
-        let recovered: Set<String> = ["heal_ok", "timeout_heal", "soft", "false_alarm", "skip_wake"]
+        let recovered: Set<String> = [
+            "heal_ok", "timeout_heal", "timeout_mount", "soft", "false_alarm",
+            "skip_wake", "skip_l0_ok",
+        ]
         guard !recovered.contains(outcome) else { return }
         let red = snapshot.tun && snapshot.ip.isEmpty && !snapshot.macbook
         guard red else { return }

@@ -2,7 +2,8 @@ import Foundation
 
 /// Background health DIFF logger + AUTO_* journal (doc-10 FDIR).
 /// Uses: StatusSnapshot, DoctorStatus, AutoDoctor, DesiredStateStore, IncidentStore.
-/// Hard DROP: tun/nas + egress (pub-IP cleared after streak, 0.5.17). ICMP peer flaps stay FLAP-only.
+/// Hard DROP: tun + egress only (0.5.19). NAS flap → DIFF/FLAP + remount, never VPN down→up.
+/// ICMP peer flaps stay FLAP-only.
 enum DropLogger {
     static var logURL: URL {
         URL(fileURLWithPath: DoctorStatus.cacheDir + "/drops.log")
@@ -98,13 +99,14 @@ enum DropLogger {
         }
 
         func hardDropFrom(_ prev: Sample) -> Bool {
+            // doc-12 / 0.5.19: NAS alone must not escalate to AUTO_DOCTOR timeout→down→up
+            // (kills a healthy tunnel while Cursor sits on SMB).
             (prev.tun && !tun)
-                || (prev.nas && !nas)
                 || (prev.tun && tun && prev.egress && !egress)
         }
 
         func hasDropFrom(_ prev: Sample) -> Bool {
-            hardDropFrom(prev) || softDropFrom(prev)
+            hardDropFrom(prev) || softDropFrom(prev) || (prev.nas && !nas)
         }
 
         func dropLabels(from prev: Sample, hardOnly: Bool) -> [String] {
@@ -114,8 +116,8 @@ enum DropLogger {
             if !hardOnly {
                 if prev.home && !home { drops.append("домашний канал пропал") }
                 if prev.macbook && !macbook { drops.append("macbook-peer не отвечает") }
+                if prev.nas && !nas { drops.append("NAS отключился") }
             }
-            if prev.nas && !nas { drops.append("NAS отключился") }
             return drops
         }
 

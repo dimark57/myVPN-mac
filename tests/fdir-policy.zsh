@@ -111,6 +111,21 @@ fi
 /usr/bin/grep -q 'follow-up mount-nas --safe' "${AP}" && pass "T22 follow-up mount" || bad "T22 follow-up mount"
 /usr/bin/grep -q 'outcomeIfOk: "timeout_heal"' "${AP}" && pass "T22 timeout→restart" || bad "T22 timeout_heal"
 
+# --- FDIR 0.5.19 / doc-12: don't break healthy tunnel ---
+SS="${ROOT}/macos/MyVPN/MyVPN/StatusSnapshot.swift"
+# hardDropFrom must NOT treat nas-only as hard
+hdf="$(/usr/bin/awk '/func hardDropFrom/,/^        }/' "${DL}")"
+print -r -- "$hdf" | /usr/bin/grep -q 'prev.nas && !nas' && bad "T23 NAS still hardDrop" || pass "T23 NAS not hardDrop"
+/usr/bin/grep -q 'skip=l0_already_ok' "${AP}" && pass "T24 skip=l0_already_ok" || bad "T24 skip=l0_already_ok"
+/usr/bin/grep -q 'timeout_no_vpn_channel\|timeout→mount-only' "${AP}" && pass "T25 timeout channel gate" || bad "T25 timeout channel gate"
+/usr/bin/grep -q 'maybeRemountNASAfterFlap\|HEAL_NAS flap=1' "${AD}" && pass "T26 NAS flap remount" || bad "T26 NAS flap remount"
+/usr/bin/grep -q 'connect-timeout' "${SS}" && pass "T27 L0 curl connect-timeout" || bad "T27 L0 curl connect-timeout"
+if ls "${ROOT}/.backlog/docs/specs"/doc-12* >/dev/null 2>&1; then
+  pass "doc-12 present"
+else
+  bad "doc-12 missing"
+fi
+
 
 # --- helper protocol 2 (app + daemon) ---
 /usr/bin/grep -q 'HELPER_PROTO = 2' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper HELPER_PROTO=2" || bad "helper HELPER_PROTO=2"

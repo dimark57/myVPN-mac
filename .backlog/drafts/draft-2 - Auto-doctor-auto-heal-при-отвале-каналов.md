@@ -13,9 +13,9 @@ documentation:
   - doc-10
 priority: high
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-9 - Автодоктор-таксономия-отвалов-и-heal.md
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-10 - FDIR-автодоктор-DesiredState-L1-L2.md
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
+  - .backlog/docs/specs/doc-9 - Автодоктор-таксономия-отвалов-и-heal.md
+  - .backlog/docs/specs/doc-10 - FDIR-автодоктор-DesiredState-L1-L2.md
+  - .backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
 ---
 ## Description
 
@@ -121,11 +121,11 @@ Delivery MVP auto-doctor/heal для релиза **0.5.0** — **перераб
     "отправка Issues на GitHub без кнопки пользователя"
   ],
   "refs": [
-    "/Volumes/Nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md",
-    "/Volumes/Nas/Project/myVPN-mac/macos/MyVPN/MyVPN/DropLogger.swift",
-    "/Volumes/Nas/Project/myVPN-mac/macos/MyVPN/MyVPN/ConnectionSettingsWindowController.swift",
-    "/Volumes/Nas/Project/myVPN-mac/lib/doctor.zsh",
-    "/Users/dmitrijstolarov/.cache/myvpn-doctor/latest.txt"
+    ".backlog/docs/specs/doc-4 - Menu-bar-myVPN.md",
+    "macos/MyVPN/MyVPN/DropLogger.swift",
+    "macos/MyVPN/MyVPN/ConnectionSettingsWindowController.swift",
+    "lib/doctor.zsh",
+    "~/.cache/myvpn-doctor/latest.txt"
   ],
   "dod_testcase": [
     {

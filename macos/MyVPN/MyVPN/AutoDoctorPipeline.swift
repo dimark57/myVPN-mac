@@ -155,6 +155,7 @@ enum AutoDoctorPipeline {
             } catch {
                 handleDoctorFailure(
                     cid: event.cid,
+                    channels: event.channels,
                     started: t0,
                     error: error,
                     callbacks: callbacks
@@ -171,6 +172,7 @@ enum AutoDoctorPipeline {
 
     private static func handleDoctorFailure(
         cid: String,
+        channels: [String],
         started: Date,
         error: Error,
         callbacks: Callbacks
@@ -215,6 +217,34 @@ enum AutoDoctorPipeline {
                 callbacks.onRefresh(true)
             }
             finish(callbacks: callbacks, cid: cid, outcome: "soft", killed: killed)
+            return
+        }
+
+        // doc-12 / 0.5.19: timeout→restart only for VPN hard channels. NAS-only never down→up.
+        let vpnChannels = channels.contains(where: { $0 == "egress" || $0 == "tun" })
+        if !vpnChannels {
+            if channels.contains("nas") {
+                DropLogger.logEvent("AUTO_HEAL timeout→mount-only channels=\(channels.joined(separator: ","))")
+                runHeal(
+                    cid: cid,
+                    primary: "NAS_MOUNT_ONLY",
+                    kind: .mountNAS,
+                    outcomeIfOk: "timeout_mount",
+                    callbacks: callbacks
+                )
+                return
+            }
+            DropLogger.logEvent(
+                "AUTO_HEAL skip=timeout_no_vpn_channel channels=\(channels.joined(separator: ","))"
+            )
+            IncidentStore.attachHeal(
+                cid: cid,
+                attempted: false,
+                ok: nil,
+                action: "none",
+                skipped: "timeout_no_vpn_channel"
+            )
+            finish(callbacks: callbacks, cid: cid, outcome: "skip_timeout_no_vpn", killed: killed)
             return
         }
 
@@ -281,6 +311,29 @@ enum AutoDoctorPipeline {
         }
 
         let followUp = AutoDoctor.isFollowUpHeal(primary: primary, kind: kind)
+
+        // doc-12 / 0.5.19: last chance — never down→up if L0 already green (probe lag / race).
+        if AutoDoctor.isRestartKind(kind), AutoDoctor.isSoftHealOK(kind: kind) {
+            DropLogger.logEvent("AUTO_HEAL skip=l0_already_ok primary=\(primary)")
+            IncidentStore.attachHeal(
+                cid: cid,
+                attempted: false,
+                ok: 1,
+                action: "none",
+                skipped: "l0_already_ok"
+            )
+            DispatchQueue.main.async {
+                callbacks.onNotify(
+                    "myVPN · Без restart",
+                    "L0 уже ок — \(primary) · \(DoctorStatus.nowStamp())",
+                    "auto-heal"
+                )
+                callbacks.onRefresh(true)
+            }
+            finish(callbacks: callbacks, cid: cid, outcome: "skip_l0_ok")
+            return
+        }
+
         DispatchQueue.main.async {
             callbacks.onBusyHeal()
             callbacks.onNotify(

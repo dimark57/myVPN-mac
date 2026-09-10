@@ -14,7 +14,7 @@ documentation:
   - doc-5
 priority: medium
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-5 - Network-Extension-myVPN.md
+  - .backlog/docs/specs/doc-5 - Network-Extension-myVPN.md
 ---
 ## Description
 
@@ -77,7 +77,7 @@ rewrite doc-5 for NE; leave spike open items; await CEO webauthn
   "refs": [
     {
       "role": "spec",
-      "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs",
+      "path": ".backlog/docs/specs",
       "doc": "doc-5 — Network Extension myVPN"
     }
   ],

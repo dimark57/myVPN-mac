@@ -14,7 +14,7 @@ documentation:
   - doc-2
 priority: high
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md
+  - .backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md
 ---
 ## Description
 
@@ -82,7 +82,7 @@ references:
   "refs": [
     {
       "role": "spec",
-      "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs",
+      "path": ".backlog/docs/specs",
       "doc": "doc-2 — Ядро sing-box и CLI myvpn"
     }
   ],

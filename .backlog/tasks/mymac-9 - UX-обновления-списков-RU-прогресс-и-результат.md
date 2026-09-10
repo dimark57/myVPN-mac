@@ -11,7 +11,7 @@ milestone: m-0
 dependencies: []
 documentation:
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-7 -
+    .backlog/docs/specs/doc-7 -
     UX-обновления-списков-RU-в-menu-bar.md
   - doc-7 — UX обновления списков RU в menu bar
 priority: high
@@ -88,8 +88,8 @@ To-be (решения CEO):
   "assignee": "@DEV",
   "out_of_scope": ["Клон Happ","NE","Новые источники сверх doc-2","Отдельный progress-bar widget"],
   "refs": [
-    {"role":"spec","path":"/srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-7 - UX-обновления-списков-RU-в-menu-bar.md","doc":"doc-7 — UX обновления списков RU в menu bar"},
-    {"role":"spec","path":"/srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md","doc":"doc-2 — Ядро sing-box и CLI myvpn"}
+    {"role":"spec","path":".backlog/docs/specs/doc-7 - UX-обновления-списков-RU-в-menu-bar.md","doc":"doc-7 — UX обновления списков RU в menu bar"},
+    {"role":"spec","path":".backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md","doc":"doc-2 — Ядро sing-box и CLI myvpn"}
   ],
   "dod_testcase": [
     {"id":"U1","step":"Обновить списки RU","where":"menu bar","pass":"Точки на пункте; остальное меню живо"},

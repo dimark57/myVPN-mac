@@ -12,19 +12,19 @@ dependencies:
   - DRAFT-2
 references:
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-11 -
+    .backlog/docs/specs/doc-11 -
     FDIR-0.5.18-ложный-egress-timeout-heal-L1-budget.md
   - >-
-    /Volumes/Nas/Project/myVPN-mac/.backlog/docs/specs/doc-11 -
+    .backlog/docs/specs/doc-11 -
     FDIR-0.5.18-ложный-egress-timeout-heal-L1-budget.md
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-10 -
+    .backlog/docs/specs/doc-10 -
     FDIR-автодоктор-DesiredState-L1-L2.md
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-11 -
+    .backlog/docs/specs/doc-11 -
     FDIR-0.5.18-ложный-egress-timeout-heal-L1-budget.md
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-9 -
+    .backlog/docs/specs/doc-9 -
     Автодоктор-таксономия-отвалов-и-heal.md
 documentation:
   - doc-11

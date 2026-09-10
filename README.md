@@ -85,6 +85,8 @@ Menu-bar клиент для macOS: несколько именованных Wi
 
 При отвале каналов (если галочки ON): auto `doctor` → журнал `~/.cache/myvpn-doctor/` → heal (`down→up` / `mount-nas` / `flush-dns`) с cooldown.  
 С **0.5.17**: если pub-IP probe пустой **2 раза подряд** при живом tun — сброс кэша IP → авто `down→up` (раньше `keep_cached` блокировал heal при zombie UDP).  
+С **0.5.18**: AND с macbook ICMP (`skip=peer_up`) — пустой ifconfig при живом peer не лечит.  
+С **0.5.19**: NAS flap не hard DROP (только remount); перед `down→up` abort если L0 уже ок (`skip=l0_already_ok`).  
 После сна: сначала канал (L0 → restart при zombie), потом **всегда** remount NAS если peers живы (даже если probe сказал nas=1 — stale SMB).  
 После обновления app: если помощник устарел — диалог «Переустановить сейчас?» и пункт меню **Обновить помощника…**. VPN выключать не нужно.
 
@@ -103,5 +105,3 @@ Issues: [github.com/dimark57/myVPN-mac/issues](https://github.com/dimark57/myVPN
 ---
 
 Сборка из исходников — [CONTRIBUTING.md](CONTRIBUTING.md). Не связан с you2vpn.ru.
-
-тестовое изменение

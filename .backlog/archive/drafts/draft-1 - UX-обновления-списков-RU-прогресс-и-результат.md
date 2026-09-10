@@ -11,7 +11,7 @@ milestone: m-0
 dependencies: []
 documentation:
   - >-
-    /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-2 -
+    .backlog/docs/specs/doc-2 -
     Ядро-sing-box-и-CLI-myvpn.md
   - doc-2 — Ядро sing-box и CLI myvpn
 priority: high
@@ -101,10 +101,10 @@ To-be: видно, что идёт обновление (прогресс/эта
     "Реклама / Discord / полный geosite Loyalsoldier"
   ],
   "refs": [
-    {"role": "spec", "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md", "doc": "doc-2 — Ядро sing-box и CLI myvpn"},
-    {"role": "spec", "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md.sig", "doc": "doc-4 — Menu bar myVPN (подпись; .md отсутствует)"},
-    {"role": "task", "path": "/srv/nas/Project/myVPN-mac/.backlog/tasks/mymac-7 - Собрать-menu-bar-myVPN-Swift.md", "id": "MYMAC-7"},
-    {"role": "evidence", "path": "/Volumes/Nas/Project/myVPN-mac/macos/MyVPN/MyVPN/AppDelegate.swift"}
+    {"role": "spec", "path": ".backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md", "doc": "doc-2 — Ядро sing-box и CLI myvpn"},
+    {"role": "spec", "path": ".backlog/docs/specs/doc-4 - Menu-bar-myVPN.md.sig", "doc": "doc-4 — Menu bar myVPN (подпись; .md отсутствует)"},
+    {"role": "task", "path": ".backlog/tasks/mymac-7 - Собрать-menu-bar-myVPN-Swift.md", "id": "MYMAC-7"},
+    {"role": "evidence", "path": "macos/MyVPN/MyVPN/AppDelegate.swift"}
   ],
   "dod_testcase": [
     {"id": "U1", "step": "Нажать «Обновить списки RU»", "where": "menu bar myVPN", "pass": "Виден прогресс/этап (не только disabled)"},

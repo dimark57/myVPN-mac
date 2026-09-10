@@ -14,7 +14,7 @@ documentation:
   - doc-3
 priority: medium
 references:
-  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-3 - Контракт-CLI-для-Alfred-gv.md
+  - .backlog/docs/specs/doc-3 - Контракт-CLI-для-Alfred-gv.md
 ---
 ## Description
 
@@ -80,7 +80,7 @@ references:
   "refs": [
     {
       "role": "spec",
-      "path": "/srv/nas/Project/myVPN-mac/.backlog/docs/specs",
+      "path": ".backlog/docs/specs",
       "doc": "doc-3 — Контракт CLI для Alfred gv"
     }
   ],
