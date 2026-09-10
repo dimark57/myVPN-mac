@@ -4,6 +4,7 @@ title: Network Extension myVPN
 type: specification
 created_date: '2026-09-07 12:55'
 updated_date: '2026-09-07 19:46'
+card: MYMAC-4
 ---
 # Network Extension myVPN
 

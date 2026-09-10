@@ -4,6 +4,7 @@ title: Ядро sing-box и CLI myvpn
 type: specification
 created_date: '2026-09-07 12:55'
 updated_date: '2026-09-07 17:35'
+card: MYMAC-6
 ---
 # Ядро sing-box и CLI myvpn
 

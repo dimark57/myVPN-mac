@@ -18,12 +18,40 @@ enum DropLogger {
     private static var confirmBaseline: Sample?
     private static var confirmCount = 0
     private static var confirmStartedAt: TimeInterval = 0
+    private static var lastLoggedConfirmCount = 0
     private static var lastFlapChannels: String = ""
     private static var lastFlapAt: TimeInterval = 0
     private static var lastFlapCount = 0
 
     /// Active incident id after DROP_CONFIRMED until pipeline finishes.
     static var currentIncidentCid: String?
+
+    /// Wake / sleep: drop wall-clock CONFIRM so lid-closed elapsed ≠ DROP (doc-11).
+    static func resetConfirm() {
+        confirmBaseline = nil
+        confirmCount = 0
+        confirmStartedAt = 0
+        lastLoggedConfirmCount = 0
+    }
+
+    /// doc-11 §6.1: «интернета» before «VPN» substring (false tun channel).
+    static func channelKind(for label: String) -> String {
+        if label.contains("интернета") { return "egress" }
+        if label.contains("NAS") { return "nas" }
+        if label.contains("выключился") { return "tun" }
+        return "other"
+    }
+
+    static func uniqueChannels(from labels: [String]) -> [String] {
+        var seen: [String] = []
+        for label in labels {
+            let kind = channelKind(for: label)
+            if !seen.contains(kind) {
+                seen.append(kind)
+            }
+        }
+        return seen
+    }
 
     static func logEvent(_ message: String) {
         let suffix: String
@@ -142,9 +170,7 @@ enum DropLogger {
             if confirmCount > 0 {
                 append("[\(isoNow())] RECOVERED after confirm \(confirmCount)/\(AutoDoctor.dropConfirmNeeded)\n")
             }
-            confirmBaseline = nil
-            confirmCount = 0
-            confirmStartedAt = 0
+            resetConfirm()
             return nil
         }
 
@@ -160,9 +186,7 @@ enum DropLogger {
             if hardEdge {
                 append("[\(isoNow())] CONFIRM skip=desired_off\n")
             }
-            confirmBaseline = nil
-            confirmCount = 0
-            confirmStartedAt = 0
+            resetConfirm()
             return nil
         }
 
@@ -171,20 +195,30 @@ enum DropLogger {
                 confirmBaseline = prev
                 confirmStartedAt = Date().timeIntervalSince1970
             }
-            if confirmCount < AutoDoctor.dropConfirmNeeded {
-                confirmCount += 1
-            }
+            bumpConfirmAndLog()
             return maybeFire(cur: cur)
         }
 
         if let base = confirmBaseline, cur.hardDropFrom(base) {
-            if confirmCount < AutoDoctor.dropConfirmNeeded {
-                confirmCount += 1
-            }
+            bumpConfirmAndLog()
             return maybeFire(cur: cur)
         }
 
         return nil
+    }
+
+    /// Log CONFIRM only when the counter grows (doc-11: 1/2 and 2/2 once, not every poll).
+    private static func bumpConfirmAndLog() {
+        let need = AutoDoctor.dropConfirmNeeded
+        if confirmCount < need {
+            confirmCount += 1
+        }
+        guard confirmCount != lastLoggedConfirmCount else { return }
+        lastLoggedConfirmCount = confirmCount
+        let elapsed = Date().timeIntervalSince1970 - confirmStartedAt
+        append(
+            "[\(isoNow())] CONFIRM \(confirmCount)/\(need) wall=\(Int(elapsed))с/\(Int(AutoDoctor.dropConfirmMinSeconds))с\n"
+        )
     }
 
     private static func maybeFire(cur: Sample) -> DropEvent? {
@@ -192,27 +226,17 @@ enum DropLogger {
         let need = AutoDoctor.dropConfirmNeeded
         let elapsed = Date().timeIntervalSince1970 - confirmStartedAt
         if confirmCount < need || elapsed < AutoDoctor.dropConfirmMinSeconds {
-            append(
-                "[\(isoNow())] CONFIRM \(confirmCount)/\(need) wall=\(Int(elapsed))с/\(Int(AutoDoctor.dropConfirmMinSeconds))с\n"
-            )
             return nil
         }
 
         let intentionalOff = !DesiredStateStore.desiredOn && (base.tun && !cur.tun)
         let drops = cur.dropLabels(from: base, hardOnly: true)
-        confirmBaseline = nil
-        confirmCount = 0
-        confirmStartedAt = 0
+        resetConfirm()
         guard !drops.isEmpty else { return nil }
 
         let cid = IncidentStore.newCid()
         currentIncidentCid = cid
-        let channels = drops.map { label -> String in
-            if label.contains("VPN") { return "tun" }
-            if label.contains("интернета") { return "egress" }
-            if label.contains("NAS") { return "nas" }
-            return "other"
-        }
+        let channels = uniqueChannels(from: drops)
 
         let stamp = DoctorStatus.nowStamp()
         let hint: String
@@ -225,7 +249,9 @@ enum DropLogger {
         } else {
             hint = "Жми «Диагностика»."
         }
-        append("[\(isoNow())] DROP_CONFIRMED \(drops.joined(separator: ", ")) cid=\(cid)\n")
+        append(
+            "[\(isoNow())] DROP_CONFIRMED \(drops.joined(separator: ", ")) channels=\(channels.joined(separator: ",")) cid=\(cid)\n"
+        )
         let body = "\(drops.joined(separator: ", ")) · \(stamp). \(hint)"
         return DropEvent(body: body, cid: cid, channels: channels, intentionalOff: intentionalOff)
     }

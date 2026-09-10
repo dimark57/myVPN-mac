@@ -13,8 +13,9 @@ dependencies: []
 documentation:
   - doc-3
 priority: medium
+references:
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-3 - Контракт-CLI-для-Alfred-gv.md
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

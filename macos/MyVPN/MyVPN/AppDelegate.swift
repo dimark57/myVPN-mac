@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Clear keep_cached after this many empties → CONFIRM → MACBOOK_EGRESS_DOWN heal.
     private static let egressEmptyClearAfter = 2
     private var wakeObserver: NSObjectProtocol?
+    /// Watchdog 60s restart, 1× per incident cid (doc-11).
+    private var watchdogWork: DispatchWorkItem?
+    private var watchdogArmedCids = Set<String>()
 
     private var isBusy: Bool { busyKey != nil }
 
@@ -1241,30 +1244,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             var next = MyVPNCLI.status(includePublicIP: includePublicIP)
             DispatchQueue.main.async {
                 guard let self else { return }
+                var pubEmptyProbe = false
                 if !includePublicIP, next.ip.isEmpty {
                     next.ip = self.snapshot.ip
-                } else if includePublicIP, next.ip.isEmpty, !self.snapshot.ip.isEmpty, next.tun {
-                    // 0.5.11: one failed ifconfig.me ≠ DROP. 0.5.17: N empties → clear → hard egress.
-                    self.egressEmptyStreak += 1
-                    let need = Self.egressEmptyClearAfter
-                    if self.egressEmptyStreak < need {
-                        DropLogger.logEvent(
-                            "EGRESS_PROBE empty keep_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)/\(need)"
-                        )
-                        next.ip = self.snapshot.ip
-                    } else {
-                        DropLogger.logEvent(
-                            "EGRESS_PROBE empty clear_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)"
-                        )
-                        self.egressEmptyStreak = 0
-                        // leave next.ip empty → DropLogger Sample.egress false → hardDrop
+                } else if includePublicIP, next.ip.isEmpty {
+                    pubEmptyProbe = true
+                    if next.tun {
+                        // doc-11: AND-streak only when overlay ICMP is also down. macbook=1 → skip=peer_up.
+                        if next.macbook {
+                            self.egressEmptyStreak = 0
+                            DropLogger.logEvent(
+                                "EGRESS_PROBE empty keep_cached=\(self.snapshot.ip) skip=peer_up"
+                            )
+                            if !self.snapshot.ip.isEmpty {
+                                next.ip = self.snapshot.ip
+                            }
+                        } else if !self.snapshot.ip.isEmpty {
+                            self.egressEmptyStreak += 1
+                            let need = Self.egressEmptyClearAfter
+                            if self.egressEmptyStreak < need {
+                                DropLogger.logEvent(
+                                    "EGRESS_PROBE empty keep_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)/\(need) peer=0"
+                                )
+                                next.ip = self.snapshot.ip
+                            } else {
+                                DropLogger.logEvent(
+                                    "EGRESS_PROBE empty clear_cached=\(self.snapshot.ip) streak=\(self.egressEmptyStreak)"
+                                )
+                                self.egressEmptyStreak = 0
+                                // leave next.ip empty → DropLogger Sample.egress false → hardDrop
+                            }
+                        }
                     }
                 } else if includePublicIP, !next.ip.isEmpty {
                     self.egressEmptyStreak = 0
                 }
                 let changed = self.snapshot != next
                 self.snapshot = next
-                FlightRecorder.append(sample: next, sessionCid: self.sessionCid)
+                FlightRecorder.append(sample: next, sessionCid: self.sessionCid, pubEmpty: pubEmptyProbe)
                 if let drop = DropLogger.observe(next) {
                     self.handleChannelDrop(drop)
                 }
@@ -1309,8 +1326,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     if self?.menuIsOpen == true { self?.rebuildMenu() }
                     self?.applyIcon()
                 },
-                onFinished: { [weak self] in
-                    self?.finishAutoDoctor()
+                onFinished: { [weak self] outcome, cid in
+                    self?.finishAutoDoctor(outcome: outcome, cid: cid)
                 },
                 onRefresh: { [weak self] includeIP in
                     self?.refreshStatus(includePublicIP: includeIP)
@@ -1319,7 +1336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
     }
 
-    private func finishAutoDoctor() {
+    private func finishAutoDoctor(outcome: String, cid: String) {
         autoDoctorInFlight = false
         if busyKey == "auto-doctor" || busyKey == "auto-heal" {
             busyKey = nil
@@ -1327,6 +1344,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         doctor = DoctorStatus.load()
         applyIcon()
         if menuIsOpen { rebuildMenu() }
+        armWatchdogIfNeeded(outcome: outcome, cid: cid)
+    }
+
+    /// Pipeline exit without successful heal + L0 red → one `.restart` after 60s, 1× per cid.
+    private func armWatchdogIfNeeded(outcome: String, cid: String) {
+        let recovered: Set<String> = ["heal_ok", "timeout_heal", "soft", "false_alarm", "skip_wake"]
+        guard !recovered.contains(outcome) else { return }
+        let red = snapshot.tun && snapshot.ip.isEmpty && !snapshot.macbook
+        guard red else { return }
+        guard !watchdogArmedCids.contains(cid) else { return }
+        watchdogArmedCids.insert(cid)
+        watchdogWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.runWatchdogRestart(cid: cid)
+        }
+        watchdogWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + AutoDoctor.watchdogSeconds, execute: work)
+        DropLogger.logEvent("WATCHDOG arm=1 delay=\(Int(AutoDoctor.watchdogSeconds))с cid=\(cid)")
+    }
+
+    private func runWatchdogRestart(cid: String) {
+        guard DesiredStateStore.desiredOn, !DesiredStateStore.isInGrace else {
+            DropLogger.logEvent("WATCHDOG skip=grace_or_off cid=\(cid)")
+            return
+        }
+        let breaker = HealCircuitBreaker.canAttemptHeal()
+        guard breaker.ok else {
+            DropLogger.logEvent("WATCHDOG skip=safe_mode cid=\(cid)")
+            return
+        }
+        let snap = snapshot
+        let red = snap.tun && snap.ip.isEmpty && !snap.macbook
+        guard red else {
+            DropLogger.logEvent("WATCHDOG skip=l0_green cid=\(cid)")
+            return
+        }
+        let kind = AutoDoctor.HealKind.restart
+        let gate = AutoDoctor.canHealNow(primary: "MACBOOK_EGRESS_DOWN", kind: kind)
+        guard gate.ok else {
+            DropLogger.logEvent("WATCHDOG skip=\(gate.reason ?? "gate") cid=\(cid)")
+            return
+        }
+        DropLogger.logEvent("WATCHDOG restart cid=\(cid)")
+        workQueue.async { [weak self] in
+            do {
+                try AutoDoctor.performHeal(kind)
+            } catch {
+                DropLogger.logEvent("WATCHDOG ok=0 err=\(error.localizedDescription) cid=\(cid)")
+                return
+            }
+            let ok = AutoDoctor.verifyAfterHeal(kind: kind) || AutoDoctor.isSoftHealOK(kind: kind)
+            AutoDoctor.recordHeal(kind: kind, primary: "MACBOOK_EGRESS_DOWN", verified: ok)
+            DropLogger.logEvent("WATCHDOG ok=\(ok ? 1 : 0) cid=\(cid)")
+            DispatchQueue.main.async {
+                self?.refreshStatus(includePublicIP: true)
+            }
+        }
+    }
+
+    private func cancelWatchdog() {
+        watchdogWork?.cancel()
+        watchdogWork = nil
     }
 
     private func registerWakeHandler() {
@@ -1336,6 +1415,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
+            DropLogger.resetConfirm()
+            self.egressEmptyStreak = 0
+            self.cancelWatchdog()
+            AutoDoctorPipeline.noteWake()
+            MyVPNCLI.abortInFlight()
             FlightRecorder.append(sample: self.snapshot, sessionCid: self.sessionCid, wake: true)
             // Soft recover: settle → L0 → pin → mount-nas; restart only if SLEEP_WAKE_STALE.
             WakeRecover.schedule(

@@ -280,7 +280,12 @@ myvpn_cmd_down() {
 
 myvpn_public_ip() {
   local t="${MYVPN_IP_TIMEOUT:-2}"
-  /usr/bin/curl -4 -sS --max-time "${t}" "${MYVPN_PUBLIC_IP_URL}" 2>/dev/null | tr -d '\n' || true
+  local raw
+  # doc-11: connect-timeout so DNS hang ≠ 35min; non-IPv4 → empty. No second URL.
+  raw="$(/usr/bin/curl -4 -sS --connect-timeout 1 --max-time "${t}" "${MYVPN_PUBLIC_IP_URL}" 2>/dev/null | tr -d '\n' || true)"
+  if [[ "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    print -r -- "$raw"
+  fi
 }
 
 myvpn_cmd_status() {

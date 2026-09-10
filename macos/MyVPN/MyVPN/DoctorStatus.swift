@@ -59,7 +59,7 @@ struct DoctorStatus: Equatable, Sendable {
     /// Compact technical badge (settings / logs).
     var menuBadge: String {
         switch primary {
-        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
+        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM", "HEALTHY_EGRESS_PROBE_FALSE_ALARM":
             return "ок"
         case "INTENTIONAL_OFF":
             return "выкл · вами"
@@ -108,7 +108,7 @@ struct DoctorStatus: Equatable, Sendable {
 
     var userHeadline: String {
         switch primary {
-        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
+        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM", "HEALTHY_EGRESS_PROBE_FALSE_ALARM":
             return "Всё в порядке"
         case "INTENTIONAL_OFF":
             return "Выключен вами"
@@ -142,7 +142,7 @@ struct DoctorStatus: Equatable, Sendable {
     var userBody: String {
         let t = displayStamp
         switch primary {
-        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM":
+        case "HEALTHY", "HEALTHY_ICMP_FALSE_ALARM", "HEALTHY_EGRESS_PROBE_FALSE_ALARM":
             return "VPN и NAS работают нормально. \(t)"
         case "INTENTIONAL_OFF":
             return "Вы сами выключили VPN — это не ошибка. Нажми «Включить», когда понадобится. \(t)"

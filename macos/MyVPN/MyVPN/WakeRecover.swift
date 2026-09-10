@@ -67,7 +67,9 @@ enum WakeRecover {
             // Do not restart on macbook-ICMP-only flaps when public IP already ok (0.5.7).
             var didRestart = false
             let egressDead = snap.tun && snap.ip.isEmpty && !snap.macbook
-            if AutoDoctor.autoHealEnabled, egressDead {
+            if AutoDoctorPipeline.healInFlight {
+                DropLogger.logEvent("WAKE_HEAL skip=pipeline")
+            } else if AutoDoctor.autoHealEnabled, egressDead {
                 didRestart = performWakeHeal(callbacks: callbacks)
                 snap = MyVPNCLI.status(includePublicIP: true)
                 DispatchQueue.main.async { callbacks.onSnapshot(snap) }

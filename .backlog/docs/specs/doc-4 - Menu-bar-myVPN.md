@@ -4,6 +4,7 @@ title: Menu bar myVPN
 type: specification
 created_date: '2026-09-07 13:10'
 updated_date: '2026-09-08 13:20'
+card: MYMAC-7
 ---
 # Menu bar myVPN
 

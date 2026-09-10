@@ -12,8 +12,11 @@ documentation:
   - doc-9
   - doc-10
 priority: high
+references:
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-9 - Автодоктор-таксономия-отвалов-и-heal.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-10 - FDIR-автодоктор-DesiredState-L1-L2.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

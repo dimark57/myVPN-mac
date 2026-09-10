@@ -3,8 +3,8 @@ id: doc-9
 title: 'Автодоктор: таксономия отвалов и heal'
 type: specification
 created_date: '2026-09-08 08:25'
+card: DRAFT-2
 ---
-
 # Автодоктор: таксономия отвалов и heal
 
 Связано: **DRAFT-2**, **doc-4 — Menu bar myVPN**, `lib/doctor.zsh`, `DropLogger.swift`.  

@@ -12,14 +12,18 @@ dependencies: []
 references:
   - .backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
   - .backlog/docs/specs/doc-5 - Network-Extension-myVPN.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-5 - Network-Extension-myVPN.md
 documentation:
-  - >-
+  - doc-4
+  - doc-5
+- doc-4
+- >-
     doc-5 — Network Extension myVPN (цель без admin; v0 = privileged helper до
     Developer ID)
 priority: high
 type: feature
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

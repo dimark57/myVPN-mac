@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum MyVPNCLIError: LocalizedError {
@@ -22,6 +23,30 @@ enum MyVPNCLIError: LocalizedError {
 enum MyVPNCLI {
     static var binaryURL: URL { RuntimePaths.myvpnBinary }
 
+    private static let abortLock = NSLock()
+    private static var activePid: pid_t = 0
+    private static var abortRequested = false
+    /// Last `run` ended via killpg (timeout or abort). Helper is never in this group.
+    static var lastKilled = false
+
+    /// Wake / watchdog: SIGTERM then SIGKILL the in-flight CLI process group (doc-11).
+    static func abortInFlight() {
+        abortLock.lock()
+        abortRequested = true
+        let pid = activePid
+        abortLock.unlock()
+        guard pid > 1 else { return }
+        killProcessGroup(pid)
+    }
+
+    private static func killProcessGroup(_ pid: pid_t) {
+        _ = killpg(pid, SIGTERM)
+        _ = Darwin.kill(pid, SIGTERM)
+        Thread.sleep(forTimeInterval: 0.5)
+        _ = killpg(pid, SIGKILL)
+        _ = Darwin.kill(pid, SIGKILL)
+    }
+
     @discardableResult
     static func run(_ args: [String], timeout: TimeInterval = 120, quiet: Bool = false) throws -> (stdout: String, stderr: String, status: Int32) {
         let path = binaryURL.path
@@ -29,6 +54,11 @@ enum MyVPNCLI {
             || FileManager.default.fileExists(atPath: path) else {
             throw MyVPNCLIError.missingBinary(path)
         }
+
+        lastKilled = false
+        abortLock.lock()
+        abortRequested = false
+        abortLock.unlock()
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
@@ -47,15 +77,41 @@ enum MyVPNCLI {
         process.standardError = errPipe
 
         try process.run()
+        let pid = process.processIdentifier
+        _ = setpgid(pid, pid)
+        abortLock.lock()
+        activePid = pid
+        abortLock.unlock()
+        defer {
+            abortLock.lock()
+            if activePid == pid { activePid = 0 }
+            abortLock.unlock()
+        }
+
         let box = process
         let wait = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
             box.waitUntilExit()
             wait.signal()
         }
-        if wait.wait(timeout: .now() + timeout) == .timedOut {
-            process.terminate()
-            throw MyVPNCLIError.failed(command: args.joined(separator: " "), exitCode: -1, stderr: "timeout")
+        // Wall-clock deadline (Date), not DispatchTime — sleep pauses mach time (doc-11).
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            abortLock.lock()
+            let abort = abortRequested
+            abortLock.unlock()
+            if abort || Date() >= deadline {
+                lastKilled = true
+                killProcessGroup(pid)
+                _ = wait.wait(timeout: .now() + 1)
+                let reason = abort ? "abort" : "timeout"
+                throw MyVPNCLIError.failed(command: args.joined(separator: " "), exitCode: -1, stderr: reason)
+            }
+            let remaining = deadline.timeIntervalSinceNow
+            let slice = min(0.25, max(0.05, remaining))
+            if wait.wait(timeout: .now() + slice) == .success {
+                break
+            }
         }
 
         let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""

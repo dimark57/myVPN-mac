@@ -189,10 +189,28 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   if [[ -f "${MYVPN_PID_FILE}" ]]; then
     pid="$(/bin/cat "${MYVPN_PID_FILE}" 2>/dev/null || true)"
   fi
-  _doc_ping 10.8.0.1 && macbook_icmp=1
-  _doc_ping 10.13.13.1 && home=1
-  [[ -n "$mb_host" ]] && _doc_ping "$mb_host" && mb_ep_icmp=1
-  [[ -n "$hm_host" ]] && _doc_ping "$hm_host" && hm_ep_icmp=1
+  # Parallel ICMP like myvpn_cmd_status (doc-11 L1 budget).
+  local mp_pid="" hp_pid="" mb_ep_pid="" hm_ep_pid=""
+  "${PING}" -c 1 -W "${ping_w}" 10.8.0.1 >/dev/null 2>&1 &
+  mp_pid=$!
+  "${PING}" -c 1 -W "${ping_w}" 10.13.13.1 >/dev/null 2>&1 &
+  hp_pid=$!
+  if [[ -n "$mb_host" ]]; then
+    "${PING}" -c 1 -W "${ping_w}" "$mb_host" >/dev/null 2>&1 &
+    mb_ep_pid=$!
+  fi
+  if [[ -n "$hm_host" ]]; then
+    "${PING}" -c 1 -W "${ping_w}" "$hm_host" >/dev/null 2>&1 &
+    hm_ep_pid=$!
+  fi
+  wait "${mp_pid}" && macbook_icmp=1 || true
+  wait "${hp_pid}" && home=1 || true
+  if [[ -n "$mb_ep_pid" ]]; then
+    wait "${mb_ep_pid}" && mb_ep_icmp=1 || true
+  fi
+  if [[ -n "$hm_ep_pid" ]]; then
+    wait "${hm_ep_pid}" && hm_ep_icmp=1 || true
+  fi
   if [[ -d "${MYVPN_NAS_MOUNT}/Project" ]]; then
     nas_fast=1
   elif [[ -d "${MYVPN_NAS_MOUNT}" ]] && myvpn_nas_in_mount_table; then
@@ -409,8 +427,12 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
   fi
 
   # --- NAS ---
-  _doc_ping "${MYVPN_NAS_HOST}" && nas_host=1
-  _doc_check "ping_nas" "$nas_host" "${MYVPN_NAS_HOST}"
+  if (( deep )); then
+    _doc_ping "${MYVPN_NAS_HOST}" && nas_host=1
+    _doc_check "ping_nas" "$nas_host" "${MYVPN_NAS_HOST}"
+  else
+    _doc_check "ping_nas" "3" "skip L1 — myvpn doctor --deep"
+  fi
 
   if myvpn_keychain_password >/dev/null 2>&1; then
     nas_key=1
@@ -531,12 +553,21 @@ print("log_signals="+q(",".join(lg.get("signals") or [])))
     _doc_action "почини Wi‑Fi/Ethernet/default route; не крути VPN restart впустую"
     _doc_evidence "underlay: ${underlay_reason:-unknown}"
   elif (( tun == 1 && egress_via_macbook == 0 && ${#pub} == 0 )); then
-    primary="MACBOOK_EGRESS_DOWN"
-    confidence="high"
-    VERDICT_LINES+=("TUN жив, underlay ок, но публичный IP пуст — overlay/handshake macbook.")
-    VERDICT_LINES+=("Скорее мёртв handshake/endpoint macbook (${mb_host:-?}:51820), не home.")
-    _doc_action "проверь доступность ${mb_host}:51820/UDP с другой сети; myvpn down && myvpn up"
-    (( mb_ep_icmp == 0 )) && _doc_action "VPS ${mb_host} не пингуется — endpoint/WAN/firewall"
+    # doc-11: empty ifconfig.me is not overlay-down if DNS or overlay ICMP is live.
+    if [[ "$dns_remote" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || (( macbook_icmp )); then
+      primary="HEALTHY_EGRESS_PROBE_FALSE_ALARM"
+      confidence="high"
+      VERDICT_LINES+=("Публичный IP пуст, но overlay жив (dns_remote IPv4 и/или ping 10.8.0.1) — ложный egress probe.")
+      VERDICT_LINES+=("UDP send ok не veto. Не restart: ifconfig.me/curl, не zombie TUN.")
+      _doc_action "ничего — HTTP IP-probe соврал; смотри dns_remote / ping_macbook_gw"
+    else
+      primary="MACBOOK_EGRESS_DOWN"
+      confidence="high"
+      VERDICT_LINES+=("TUN жив, underlay ок, но публичный IP пуст — overlay/handshake macbook.")
+      VERDICT_LINES+=("Скорее мёртв handshake/endpoint macbook (${mb_host:-?}:51820), не home.")
+      _doc_action "проверь доступность ${mb_host}:51820/UDP с другой сети; myvpn down && myvpn up"
+      (( mb_ep_icmp == 0 )) && _doc_action "VPS ${mb_host} не пингуется — endpoint/WAN/firewall"
+    fi
   elif (( tun == 1 && home == 0 && egress_via_macbook == 1 )); then
     primary="HOME_DOWN_MACBOOK_OK"
     confidence="high"
@@ -656,7 +687,7 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
   # PRIMARY is the human severity. Heal maps PRIMARY, not OVERALL.
   # FAIL = tun/underlay/egress/home/conflict. WARN = SMB/DNS/endpoint-via-tun.
   case "$primary" in
-    HEALTHY|HEALTHY_ICMP_FALSE_ALARM|INTENTIONAL_OFF) overall="PASS" ;;
+    HEALTHY|HEALTHY_ICMP_FALSE_ALARM|HEALTHY_EGRESS_PROBE_FALSE_ALARM|INTENTIONAL_OFF) overall="PASS" ;;
     HEALTHY_BUT_ENDPOINT_VIA_TUN|NAS_STALE|NAS_MOUNT_ONLY|DNS_STALE|EGRESS_NOT_VIA_MACBOOK) overall="WARN" ;;
     UNDERLAY_DOWN|TUN_DOWN|MACBOOK_EGRESS_DOWN|HOME_PEER_DOWN|HOME_DOWN_MACBOOK_OK|CONFLICT_WG_APP) overall="FAIL" ;;
   esac
@@ -707,6 +738,7 @@ print("\n".join(lines) if lines else "(no change vs previous doctor)")
     print -r -- ""
     print -r -- "Как читать:"
     print -r -- "  HEALTHY* — сейчас каналы живы; смотри WARN про endpoint→utun."
+    print -r -- "  HEALTHY_EGRESS_PROBE_FALSE_ALARM — пустой pub-IP при живом DNS/ICMP (не heal)."
     print -r -- "  UNDERLAY_DOWN — Wi‑Fi/default/Errno 49; не restart VPN."
     print -r -- "  HOME_PEER_DOWN / HOME_DOWN_MACBOOK_OK — «отвал NAS/Hub» (FAIL)."
     print -r -- "  MACBOOK_EGRESS_DOWN — overlay/egress при живом underlay (FAIL)."

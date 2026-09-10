@@ -4,6 +4,7 @@ title: Контракт CLI для Alfred gv
 type: specification
 created_date: '2026-09-07 13:00'
 updated_date: '2026-09-07 17:30'
+card: MYMAC-2
 ---
 # Контракт CLI для Alfred gv
 

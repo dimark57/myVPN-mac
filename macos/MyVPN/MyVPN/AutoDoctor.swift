@@ -48,6 +48,8 @@ enum AutoDoctor {
     static let l1DoctorTimeout: TimeInterval = 10
     static let l2DoctorTimeout: TimeInterval = 90
     static let mountUITimeout: TimeInterval = 120
+    /// After pipeline exit without successful heal, one restart if L0 still red (doc-11).
+    static let watchdogSeconds: TimeInterval = 60
 
     enum HealKind: Equatable {
         case up
@@ -63,7 +65,7 @@ enum AutoDoctor {
         ("TUN_DOWN", "VPN выкл (desired ON)", "myvpn up"),
         ("INTENTIONAL_OFF", "Ручной Off", "не heal"),
         ("UNDERLAY_DOWN", "Wi‑Fi/default/Errno 49", "ждать сеть · не restart"),
-        ("MACBOOK_EGRESS_DOWN", "Нет интернета, underlay ок", "down→up + mount"),
+        ("MACBOOK_EGRESS_DOWN", "Нет интернета, underlay ок", "down→up"),
         ("HOME_PEER_DOWN", "Нет home / NAS / Hub", "down→up + mount-nas"),
         ("HOME_DOWN_MACBOOK_OK", "Интернет ок, home мёртв", "down→up + mount-nas"),
         ("NAS_MOUNT_ONLY", "Том NAS не смонтирован", "mount-nas (safe)"),
@@ -72,6 +74,7 @@ enum AutoDoctor {
         ("DNS_STALE", "DNS не на TUN", "flush-dns"),
         ("CONFLICT_WG_APP", "Конфликт с WireGuard.app", "вручную выключить WG.app"),
         ("HEALTHY_ICMP_FALSE_ALARM", "ICMP filter, egress жив", "не heal"),
+        ("HEALTHY_EGRESS_PROBE_FALSE_ALARM", "Пустой pub-IP, DNS/ICMP жив", "не heal"),
         ("HEALTHY_BUT_ENDPOINT_VIA_TUN", "Риск после sleep", "не heal (warn)"),
         ("SLEEP_WAKE_STALE", "После wake egress мёртв", "down→up + re-pin"),
         ("EGRESS_NOT_VIA_MACBOOK", "IP не через macbook", "только doctor"),
@@ -86,7 +89,9 @@ enum AutoDoctor {
             return .none(reason: "desired_off")
         case "UNDERLAY_DOWN":
             return .none(reason: "underlay — ждать Wi‑Fi/WAN")
-        case "MACBOOK_EGRESS_DOWN", "SLEEP_WAKE_STALE":
+        case "MACBOOK_EGRESS_DOWN":
+            return .restart
+        case "SLEEP_WAKE_STALE":
             return .restartAndMount
         case "HOME_PEER_DOWN", "HOME_DOWN_MACBOOK_OK":
             return .restartAndMount

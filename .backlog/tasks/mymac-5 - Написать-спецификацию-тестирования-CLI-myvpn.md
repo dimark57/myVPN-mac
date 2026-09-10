@@ -13,8 +13,9 @@ dependencies: []
 documentation:
   - doc-6
 priority: high
+references:
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-6 - Тестирование-CLI-myvpn.md
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

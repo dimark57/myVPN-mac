@@ -4,8 +4,8 @@ title: 'FDIR: DesiredState, L0/L1/L2, Safe Mode'
 type: specification
 created_date: '2026-09-09 14:20'
 target_version: '0.5.17'
+card: DRAFT-2
 ---
-
 # FDIR: DesiredState, L0/L1/L2, Safe Mode
 
 Связано: **DRAFT-2**, **doc-9 — Автодоктор: таксономия отвалов и heal**, **doc-4**, `DropLogger.swift`, `AutoDoctor.swift`, `lib/doctor.zsh`.  

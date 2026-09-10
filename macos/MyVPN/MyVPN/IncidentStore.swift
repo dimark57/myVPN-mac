@@ -36,13 +36,21 @@ enum IncidentStore {
         trimOld()
     }
 
-    static func attachL1(cid: String, primary: String, overall: String, ms: Int, layer: String = "L1") {
+    static func attachL1(
+        cid: String,
+        primary: String,
+        overall: String,
+        ms: Int,
+        layer: String = "L1",
+        killed: Bool = false
+    ) {
         var obj = load(cid: cid) ?? ["cid": cid]
         obj["l1"] = [
             "primary": primary,
             "overall": overall,
             "layer": layer,
             "ms": ms,
+            "killed": killed ? 1 : 0,
         ]
         obj["report_path"] = DoctorStatus.latestURL.path
         write(cid: cid, obj: obj)
@@ -58,6 +66,42 @@ enum IncidentStore {
         if let skipped { heal["skipped"] = skipped }
         obj["heal"] = heal
         write(cid: cid, obj: obj)
+    }
+
+    /// Wall-clock ms since INCIDENT begin (DROP → end, or until L0 green if already recovered).
+    static func elapsedMs(cid: String) -> Int {
+        guard let obj = load(cid: cid), let ts = obj["ts_start"] as? String else { return 0 }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        guard let start = f.date(from: ts) else { return 0 }
+        return max(0, Int(Date().timeIntervalSince(start) * 1000))
+    }
+
+    /// Close incident: ts_end, outcome, recovery_ms, l1.killed. Never leave heal: null after begin.
+    static func end(cid: String, outcome: String, recoveryMs: Int, killed: Bool = false) {
+        var obj = load(cid: cid) ?? ["cid": cid]
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        obj["ts_end"] = f.string(from: Date())
+        obj["outcome"] = outcome
+        obj["recovery_ms"] = recoveryMs
+        let alreadyKilled = ((obj["l1"] as? [String: Any])?["killed"] as? Int) == 1
+        let flag = killed || alreadyKilled
+        if var l1 = obj["l1"] as? [String: Any] {
+            l1["killed"] = flag ? 1 : 0
+            obj["l1"] = l1
+        } else if flag {
+            obj["l1"] = ["killed": 1]
+        }
+        if obj["heal"] == nil || obj["heal"] is NSNull {
+            obj["heal"] = [
+                "attempted": false,
+                "action": "none",
+                "skipped": outcome,
+            ]
+        }
+        write(cid: cid, obj: obj)
+        DropLogger.logEvent("INCIDENT end cid=\(cid) outcome=\(outcome) recovery_ms=\(recoveryMs)")
     }
 
     static func path(cid: String) -> String {

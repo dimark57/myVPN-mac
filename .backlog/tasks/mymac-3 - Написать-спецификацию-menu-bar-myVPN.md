@@ -13,8 +13,9 @@ dependencies: []
 documentation:
   - doc-4
 priority: medium
+references:
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-4 - Menu-bar-myVPN.md
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

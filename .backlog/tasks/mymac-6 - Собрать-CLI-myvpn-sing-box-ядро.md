@@ -12,12 +12,13 @@ milestone: m-0
 dependencies: []
 references:
   - /srv/nas/Project/myVPN-mac/.backlog/artifacts/MYMAC-6/test-report.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-2 - Ядро-sing-box-и-CLI-myvpn.md
+  - /srv/nas/Project/myVPN-mac/.backlog/docs/specs/doc-6 - Тестирование-CLI-myvpn.md
 documentation:
   - doc-2
   - doc-6
 priority: high
 ---
-
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->

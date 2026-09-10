@@ -55,9 +55,61 @@ fi
 /usr/bin/grep -q '_doc_check "runtime_local" "2"' "${ROOT}/lib/doctor.zsh" && pass "runtime_local WARN code" || bad "runtime_local WARN code"
 /usr/bin/grep -q '_doc_check "autostart" "3"' "${ROOT}/lib/doctor.zsh" && pass "autostart off INFO" || bad "autostart off INFO"
 
-# --- Info.plist 0.5.16 ---
+# --- Info.plist version present (do not pin a shipping build — 0.5.18+ tracks ship) ---
 ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${ROOT}/macos/MyVPN/MyVPN/Info.plist")"
-[[ "$ver" == "0.5.16" ]] && pass "version $ver" || bad "version want 0.5.16 got $ver"
+[[ -n "$ver" ]] && pass "version $ver" || bad "version missing"
+
+# --- FDIR 0.5.18 / doc-11 ---
+AD="${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift"
+DL="${ROOT}/macos/MyVPN/MyVPN/DropLogger.swift"
+AU="${ROOT}/macos/MyVPN/MyVPN/AutoDoctor.swift"
+AP="${ROOT}/macos/MyVPN/MyVPN/AutoDoctorPipeline.swift"
+CLI="${ROOT}/macos/MyVPN/MyVPN/MyVPNCLI.swift"
+FR="${ROOT}/macos/MyVPN/MyVPN/FlightRecorder.swift"
+IS="${ROOT}/macos/MyVPN/MyVPN/IncidentStore.swift"
+DOC="${ROOT}/lib/doctor.zsh"
+PR="${ROOT}/lib/process.zsh"
+
+/usr/bin/grep -q 'skip=peer_up' "${AD}" && pass "T9 skip=peer_up" || bad "T9 skip=peer_up"
+/usr/bin/grep -q 'HEALTHY_EGRESS_PROBE_FALSE_ALARM' "${DOC}" && pass "T10 HEALTHY_EGRESS_PROBE_FALSE_ALARM doctor" || bad "T10 HEALTHY_EGRESS_PROBE_FALSE_ALARM doctor"
+/usr/bin/grep -q 'HEALTHY_EGRESS_PROBE_FALSE_ALARM' "${AU}" && pass "T10 catalog false-alarm" || bad "T10 catalog false-alarm"
+
+# healKind MACBOOK_EGRESS_DOWN = .restart, not .restartAndMount
+eg_case="$(/usr/bin/awk '/case "MACBOOK_EGRESS_DOWN"/{p=1;next} p{print; exit}' "${AU}")"
+print -r -- "$eg_case" | /usr/bin/grep -q 'return \.restart$' && pass "T11 healKind egress restart-only" || bad "T11 healKind egress restart-only got: $eg_case"
+print -r -- "$eg_case" | /usr/bin/grep -q 'restartAndMount' && bad "T11 egress still restartAndMount" || true
+
+/usr/bin/grep -q 'INCIDENT end' "${IS}" && pass "T12 INCIDENT end" || bad "T12 INCIDENT end"
+/usr/bin/grep -q 'func end(cid: String, outcome: String, recoveryMs:' "${IS}" && pass "T12 end(cid:outcome:recoveryMs)" || bad "T12 end signature"
+
+# channels: интернета before выключился inside channelKind
+ck="$(/usr/bin/awk '/static func channelKind/,/^    }/' "${DL}")"
+print -r -- "$ck" | /usr/bin/grep -q 'интернета' && pass "T13 channelKind интернета" || bad "T13 channelKind интернета"
+# Ensure интернета appears before выключился inside channelKind
+ck_inet="$(print -r -- "$ck" | /usr/bin/grep -n 'интернета' | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+ck_tun="$(print -r -- "$ck" | /usr/bin/grep -n 'выключился' | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+if [[ -n "$ck_inet" && -n "$ck_tun" && "$ck_inet" -lt "$ck_tun" ]]; then
+  pass "T13 интернета-first ($ck_inet < $ck_tun)"
+else
+  bad "T13 интернета-first inet=$ck_inet tun=$ck_tun"
+fi
+
+/usr/bin/grep -q 'killpg' "${CLI}" && pass "T14 killpg" || bad "T14 killpg"
+/usr/bin/grep -q 'setpgid' "${CLI}" && pass "T14 setpgid" || bad "T14 setpgid"
+/usr/bin/grep -q 'abortInFlight' "${CLI}" && pass "T14 abortInFlight" || bad "T14 abortInFlight"
+/usr/bin/grep -q 'pub_empty' "${FR}" && pass "T15 pub_empty" || bad "T15 pub_empty"
+/usr/bin/grep -q 'resetConfirm' "${DL}" && pass "T16 resetConfirm" || bad "T16 resetConfirm"
+/usr/bin/grep -q 'DropLogger.resetConfirm' "${AD}" && pass "T16 wake resetConfirm" || bad "T16 wake resetConfirm"
+/usr/bin/grep -q 'watchdogSeconds' "${AU}" && pass "T17 watchdogSeconds" || bad "T17 watchdogSeconds"
+/usr/bin/grep -q 'WATCHDOG' "${AD}" && pass "T17 WATCHDOG" || bad "T17 WATCHDOG"
+/usr/bin/grep -q 'MyVPNCLI.abortInFlight' "${AD}" && pass "T18 wake abort doctor" || bad "T18 abort doctor"
+/usr/bin/grep -q 'skip=wake' "${AP}" && pass "T18 skip=wake" || bad "T18 skip=wake"
+/usr/bin/grep -q 'WAKE_HEAL skip=pipeline' "${ROOT}/macos/MyVPN/MyVPN/WakeRecover.swift" && pass "T18 skip=pipeline" || bad "T18 skip=pipeline"
+/usr/bin/grep -q 'connect-timeout' "${PR}" && pass "T19 curl --connect-timeout" || bad "T19 curl --connect-timeout"
+/usr/bin/grep -q 'ping_nas' "${DOC}" && /usr/bin/grep -q 'skip L1 — myvpn doctor --deep' "${DOC}" && pass "T20 skip ping_nas L1" || bad "T20 skip ping_nas L1"
+/usr/bin/grep -q 'killed=' "${AP}" && pass "T21 AUTO_DOCTOR killed=" || bad "T21 killed="
+/usr/bin/grep -q 'follow-up mount-nas --safe' "${AP}" && pass "T22 follow-up mount" || bad "T22 follow-up mount"
+/usr/bin/grep -q 'outcomeIfOk: "timeout_heal"' "${AP}" && pass "T22 timeout→restart" || bad "T22 timeout_heal"
 
 
 # --- helper protocol 2 (app + daemon) ---

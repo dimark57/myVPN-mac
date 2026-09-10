@@ -4,6 +4,7 @@ title: Тестирование CLI myvpn
 type: specification
 created_date: '2026-09-07 13:00'
 updated_date: '2026-09-07 17:35'
+card: MYMAC-6
 ---
 # Тестирование CLI myvpn
 

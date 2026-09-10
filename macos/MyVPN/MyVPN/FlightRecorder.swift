@@ -8,7 +8,7 @@ enum FlightRecorder {
 
     private static let maxLines = 2000
 
-    static func append(sample: StatusSnapshot, sessionCid: String, wake: Bool = false) {
+    static func append(sample: StatusSnapshot, sessionCid: String, wake: Bool = false, pubEmpty: Bool = false) {
         try? FileManager.default.createDirectory(
             atPath: DoctorStatus.cacheDir,
             withIntermediateDirectories: true
@@ -27,6 +27,9 @@ enum FlightRecorder {
         ]
         if !sample.ip.isEmpty {
             obj["pub_cached"] = sample.ip
+        }
+        if pubEmpty {
+            obj["pub_empty"] = 1
         }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               var line = String(data: data, encoding: .utf8) else { return }
