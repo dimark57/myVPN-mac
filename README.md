@@ -103,3 +103,5 @@ Issues: [github.com/dimark57/myVPN-mac/issues](https://github.com/dimark57/myVPN
 ---
 
 Сборка из исходников — [CONTRIBUTING.md](CONTRIBUTING.md). Не связан с you2vpn.ru.
+
+тестовое изменение
