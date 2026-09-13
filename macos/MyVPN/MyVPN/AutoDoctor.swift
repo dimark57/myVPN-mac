@@ -66,8 +66,8 @@ enum AutoDoctor {
         ("INTENTIONAL_OFF", "Ручной Off", "не heal"),
         ("UNDERLAY_DOWN", "Wi‑Fi/default/Errno 49", "ждать сеть · не restart"),
         ("MACBOOK_EGRESS_DOWN", "Нет интернета, underlay ок", "down→up"),
-        ("HOME_PEER_DOWN", "Нет home / NAS / Hub", "down→up + mount-nas"),
-        ("HOME_DOWN_MACBOOK_OK", "Интернет ок, home мёртв", "down→up + mount-nas"),
+        ("HOME_PEER_DOWN", "Нет home / NAS / Hub", "down→up; mount follow-up"),
+        ("HOME_DOWN_MACBOOK_OK", "Интернет ок, home мёртв", "mount-nas (safe) · не restart"),
         ("NAS_MOUNT_ONLY", "Том NAS не смонтирован", "mount-nas (safe)"),
         ("NAS_STALE", "SMB half-open", "mount-nas (safe)"),
         ("NAS_BUSY", "NAS занят open files", "не force · notify"),
@@ -92,10 +92,10 @@ enum AutoDoctor {
         case "MACBOOK_EGRESS_DOWN":
             return .restart
         case "SLEEP_WAKE_STALE":
-            return .restartAndMount
-        case "HOME_PEER_DOWN", "HOME_DOWN_MACBOOK_OK":
-            return .restartAndMount
-        case "NAS_STALE", "NAS_MOUNT_ONLY":
+            return .restart
+        case "HOME_PEER_DOWN":
+            return .restart
+        case "HOME_DOWN_MACBOOK_OK", "NAS_STALE", "NAS_MOUNT_ONLY":
             return .mountNAS
         case "NAS_BUSY":
             return .none(reason: "NAS_BUSY — не force")

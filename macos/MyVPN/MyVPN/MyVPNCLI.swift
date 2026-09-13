@@ -148,6 +148,11 @@ enum MyVPNCLI {
         if force { args.append("--force") }
         if safe { args.append("--safe") }
         let result = try run(args, timeout: 120, quiet: true)
+        // doc-13: --safe + open files → exit 2. Not a heal failure (no Safe Mode).
+        if result.status == 2 {
+            DropLogger.logEvent("HEAL_NAS skip=busy")
+            return
+        }
         if result.status != 0 {
             throw MyVPNCLIError.failed(command: "mount-nas", exitCode: result.status, stderr: result.stderr + result.stdout)
         }

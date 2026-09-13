@@ -126,6 +126,37 @@ else
   bad "doc-12 missing"
 fi
 
+# --- FDIR 0.5.20 / doc-13: Connection heal must not yank Shares ---
+home_ok="$(/usr/bin/awk '/case "HOME_DOWN_MACBOOK_OK"/{p=1;next} p{print; exit}' "${AU}")"
+print -r -- "$home_ok" | /usr/bin/grep -q 'return \.mountNAS' && pass "T28 HOME_DOWN_MACBOOK_OK mountNAS" || bad "T28 HOME_DOWN_MACBOOK_OK got: $home_ok"
+print -r -- "$home_ok" | /usr/bin/grep -q 'restart' && bad "T28 HOME_DOWN still restart: $home_ok" || true
+
+home_peer="$(/usr/bin/awk '/case "HOME_PEER_DOWN"/{p=1;next} p{print; exit}' "${AU}")"
+print -r -- "$home_peer" | /usr/bin/grep -q 'return \.restart$' && pass "T29 HOME_PEER_DOWN restart-only" || bad "T29 HOME_PEER_DOWN got: $home_peer"
+print -r -- "$home_peer" | /usr/bin/grep -q 'restartAndMount' && bad "T29 HOME_PEER still restartAndMount" || true
+
+nas_fn="$(/usr/bin/awk '/^myvpn_nas_unmount_for_remount/,/^}/' "${ROOT}/lib/nas.zsh")"
+busy_line="$(print -r -- "$nas_fn" | /usr/bin/grep -n 'skip unmount (doc-13)' | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+umount_line="$(print -r -- "$nas_fn" | /usr/bin/grep -n 'nas unmount ' | /usr/bin/head -1 | /usr/bin/cut -d: -f1)"
+if [[ -n "$busy_line" && -n "$umount_line" && "$busy_line" -lt "$umount_line" ]]; then
+  pass "T30 busy before unmount ($busy_line < $umount_line)"
+else
+  bad "T30 busy before unmount busy=$busy_line umount=$umount_line"
+fi
+
+/usr/bin/grep -q 'primary == "HOME_PEER_DOWN"' "${AP}" && /usr/bin/grep -q 'followUpMountIfNASDown' "${AP}" && pass "T31 HOME_PEER follow-up" || bad "T31 HOME_PEER follow-up"
+/usr/bin/grep -q 'HEAL_NAS skip=busy' "${CLI}" && pass "T32 CLI skip=busy" || bad "T32 CLI skip=busy"
+
+sleep_case="$(/usr/bin/awk '/case "SLEEP_WAKE_STALE"/{p=1;next} p{print; exit}' "${AU}")"
+print -r -- "$sleep_case" | /usr/bin/grep -q 'return \.restart$' && pass "T33 SLEEP_WAKE_STALE restart-only" || bad "T33 SLEEP_WAKE got: $sleep_case"
+print -r -- "$sleep_case" | /usr/bin/grep -q 'restartAndMount' && bad "T33 SLEEP still restartAndMount" || true
+
+if ls "${ROOT}/.backlog/docs/specs"/doc-13* >/dev/null 2>&1; then
+  pass "T34 doc-13 present"
+else
+  bad "T34 doc-13 missing"
+fi
+
 
 # --- helper protocol 2 (app + daemon) ---
 /usr/bin/grep -q 'HELPER_PROTO = 2' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper HELPER_PROTO=2" || bad "helper HELPER_PROTO=2"

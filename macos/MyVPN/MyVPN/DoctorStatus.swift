@@ -155,7 +155,7 @@ struct DoctorStatus: Equatable, Sendable {
         case "MACBOOK_EGRESS_DOWN":
             return "Туннель есть, но интернет через macbook не проходит. Попробуй Выключить → Включить. \(t)"
         case "HOME_DOWN_MACBOOK_OK":
-            return "Интернет есть, а домашний канал (NAS/Hub) нет. Часто после сна. Выключить → Включить. \(t)"
+            return "Интернет жив — VPN restart не нужен. Если шара отвалилась: Смонтировать NAS. Home peer: Выключить → Включить вручную. \(t)"
         case "HOME_PEER_DOWN":
             return "Домашний VPN-peer не отвечает — NAS и внутренние сервисы недоступны. \(t)"
         case "NAS_STALE":

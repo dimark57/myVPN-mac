@@ -368,7 +368,7 @@ enum AutoDoctorPipeline {
                 action: AutoDoctor.kindLabel(kind),
                 skipped: softTag.isEmpty ? nil : "soft"
             )
-            if kind == .restart, primary == "MACBOOK_EGRESS_DOWN" {
+            if kind == .restart, (primary == "MACBOOK_EGRESS_DOWN" || primary == "HOME_PEER_DOWN") {
                 followUpMountIfNASDown()
             }
             DispatchQueue.main.async {
@@ -407,7 +407,8 @@ enum AutoDoctorPipeline {
         }
     }
 
-    /// After egress `.restart` + verify PASS: mount-nas --safe if L0 nas=0 (120s follow-up window).
+    /// After VPN `.restart` + verify PASS: mount-nas --safe if L0 nas=0 (120s follow-up window).
+    /// MACBOOK_EGRESS_DOWN (doc-11) and HOME_PEER_DOWN (doc-13) — never mount in the same performHeal.
     private static func followUpMountIfNASDown() {
         let snap = MyVPNCLI.status(includePublicIP: false)
         guard !snap.nas else { return }

@@ -96,6 +96,11 @@ myvpn_nas_force_unmount() {
 myvpn_nas_unmount_for_remount() {
   local safe="${1:-0}"
   myvpn_nas_in_mount_table || [[ -d "${MYVPN_NAS_MOUNT}" ]] || return 0
+  # doc-13 / 0.5.20: check busy BEFORE any unmount — graceful umount can still yank Cursor.
+  if (( safe )) && myvpn_nas_in_mount_table && myvpn_nas_volume_busy; then
+    print -r -- "NAS_BUSY: ${MYVPN_NAS_MOUNT} has open files — skip unmount (doc-13)" >&2
+    return 2
+  fi
   print -r -- "nas unmount ${MYVPN_NAS_MOUNT}"
   if myvpn_nas_graceful_unmount; then
     return 0

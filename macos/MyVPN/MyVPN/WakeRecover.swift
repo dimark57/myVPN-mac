@@ -88,7 +88,7 @@ enum WakeRecover {
                 }
             }
 
-            // NAS when channel alive — always remount (0.5.6): L0 nas=1 can be stale SMB ghost.
+            // NAS when channel alive — remount stale ghost (0.5.6). --safe: skip umount if open files (0.5.20).
             let channelLive = snap.tun && (snap.home || snap.macbook)
             let wantNAS = MyVPNCLI.autoNASEnabled() || AutoDoctor.autoHealEnabled
             if wantNAS {

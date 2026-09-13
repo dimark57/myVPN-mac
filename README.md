@@ -87,7 +87,8 @@ Menu-bar клиент для macOS: несколько именованных Wi
 С **0.5.17**: если pub-IP probe пустой **2 раза подряд** при живом tun — сброс кэша IP → авто `down→up` (раньше `keep_cached` блокировал heal при zombie UDP).  
 С **0.5.18**: AND с macbook ICMP (`skip=peer_up`) — пустой ifconfig при живом peer не лечит.  
 С **0.5.19**: NAS flap не hard DROP (только remount); перед `down→up` abort если L0 уже ок (`skip=l0_already_ok`).  
-После сна: сначала канал (L0 → restart при zombie), потом **всегда** remount NAS если peers живы (даже если probe сказал nas=1 — stale SMB).  
+С **0.5.20**: home при живом интернете не делает `down→up` (только `mount-nas --safe`); `--safe` не umount при открытых файлах (`skip=busy`).  
+После сна: сначала канал (L0 → restart при zombie), потом `mount-nas --safe` если peers живы (stale SMB; skip если том занят).  
 После обновления app: если помощник устарел — диалог «Переустановить сейчас?» и пункт меню **Обновить помощника…**. VPN выключать не нужно.
 
 Логи: `~/Library/Logs/myvpn-menubar.log`, `~/.config/myvpn/sing-box.log`, `~/.cache/myvpn-doctor/drops.log`.
