@@ -48,7 +48,7 @@ for f in nas.zsh parse_conf.py render_config.py settings.py channels.py update_r
 done
 
 for f in "doc-3 - Контракт-CLI-для-Alfred-gv.md" "doc-4 - Menu-bar-myVPN.md"; do
-  [[ -f "$ROOT/.backlog/docs/specs/$f" ]] && ok "spec/$f" || bad "spec/$f" "missing"
+  [[ -f "$ROOT/docs/specs/$f" ]] && ok "spec/$f" || bad "spec/$f" "missing"
 done
 
 [[ -f "$ROOT/.gitignore" ]] && rg -q 'DerivedData' "$ROOT/.gitignore" && ok gitignore-DerivedData || bad gitignore "DerivedData"

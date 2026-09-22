@@ -10,7 +10,7 @@
 |------|------|
 | `bin/myvpn`, `lib/` | CLI + sing-box glue |
 | `macos/MyVPN/` | Menu bar app + helper |
-| `.backlog/docs/specs/` | Engineering specs (agents + humans) |
+| `docs/specs/` | Engineering specs (agents + humans) |
 | `AGENTS.md` | Agent/developer contour |
 
 ## Publish a release (единственный путь доставки на Mac)
@@ -43,4 +43,4 @@ Runtime must live on local disk (`~/.local/share/myvpn` or inside the app bundle
 ## Docs rule
 
 User-facing copy → `README.md` only.  
-Product/architecture decisions → `AGENTS.md` + `.backlog/docs/specs/doc-8 - …` in the same change as the code.
+Product/architecture decisions → `AGENTS.md` + `docs/specs/doc-8 - …` in the same change as the code. Tasks → myTask (`MYMAC-*`), not markdown queue.

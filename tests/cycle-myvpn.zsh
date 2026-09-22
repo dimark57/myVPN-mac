@@ -248,7 +248,7 @@ phase_verify() {
   # C11: with TUN auto_route OS `route get` shows utun — handshake (macbook/home=1) is the real check.
   record_check "endpoint_direct" "$([[ "$st_mb" == "1" && "$st_hm" == "1" ]] && echo 1 || echo 0)" "peers up (TUN hides LAN route; OS route may show utun)"
 
-  record_check "mount_nas" "$([[ "$st_nas" == "1" || -d /Volumes/Nas/Project ]] && echo 1 || echo 0)" "nas=${st_nas}"
+  record_check "mount_nas" "$([[ "$st_nas" == "1" ]] && echo 1 || echo 0)" "nas=${st_nas}"
 }
 
 phase_myvpn_down() {

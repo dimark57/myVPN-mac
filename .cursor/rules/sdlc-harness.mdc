@@ -1,30 +1,35 @@
 ---
-description: SDLC harness — backlog + mySkills
+description: SDLC — myTask + mySkills (myVPN-mac)
 alwaysApply: true
 ---
 
-# SDLC harness (mySkills)
+# SDLC (myVPN-mac)
 
-Канон cutover: `mySkills/.backlog/docs/specs/process/doc-21 - Cutover-myMCP-—-уборка-и-перенос.md`.  
-Registry SoT: `myBackLog/registry/projects.json` (не myMCP).
+SoT задач: **myTask REST** (префикс `MYMAC`, проект `myVPN-mac`). Registry: `myNAS/stacks/agent/backlog-hub/registry/projects.json`.
 
-## Какой инструмент когда
+## Инструменты
 
-| Ситуация | Инструмент | Не делать |
-|----------|------------|-----------|
-| Спека и задача | навык `backlog` (Draft → документ в `.backlog/docs/` → promote) | второй контур планирования в том же чате |
-| Код / **Реализовывай** | одна backlog-задача в целевом репо | планировщик в том же чате |
-| Как делать руками | `mySkills/skills/README.md` | копировать навыки в проект |
-| Продукт / QA чат | только backlog | код в том же чате |
+| Ситуация | Инструмент |
+|----------|------------|
+| Задачи / очередь | навык **mytask** (`~/repos/mySkills/skills/mytask/`) |
+| Спеки | `docs/specs/` → при изменении кода |
+| Ship / релиз | навык **cd** (`macos-gh-app`) → `macos/MyVPN/ship.zsh --confirm` |
+| Пути NAS/Mac | навык **nas-layout** в mySkills |
 
-## Железное правило
+**Не** файловая `.backlog/tasks/`. **Не** копировать skills в этот репо.
 
-Один контур: backlog + навыки.
+## mySkills (канон путей)
 
-Handoff: спека в `.backlog/docs/` → задача с AC → code-agent берёт одну задачу.
+| | Mac | NAS |
+|--|-----|-----|
+| clone | `~/repos/mySkills` | `/srv/nas/repos/mySkills` |
+| CLI | `~/repos/mySkills/bin/myskills` в PATH | `/srv/nas/repos/mySkills/bin/myskills` |
 
-## LOCKED (не переоткрывать)
+Установка CLI: [dimark57/mySkills](https://github.com/dimark57/mySkills) → `docs/user/myskills-install.md` (git clone, не brew как runtime).
 
-- **Не** строить новый оркестратор поверх backlog (см. myHarness doc-13).
-- Hub UI: папка на диске ≠ плитка. Нужны `myBackLog/registry/projects.json` **и** `.backlog/`.
-- Этот дом ≠ you2vpn (`BACK-*`).
+Этот репо: `~/repos/myVPN-mac` (Mac), `/srv/nas/repos/myVPN-mac` (NAS mirror).
+
+## LOCKED
+
+- Не you2vpn (`BACK-*`).
+- Releases только GitHub (`AGENTS.md`).

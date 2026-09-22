@@ -130,10 +130,14 @@ const ASSIGNEE = ASSIGNEE_RAW.startsWith("@")
 function resolveBsBin() {
   const fromEnv = process.env.AUTOSCAN_BS;
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  const skillsRoot =
+    process.env.MY_SKILLS_ROOT ||
+    process.env.MYSKILLS_ROOT ||
+    "/srv/nas/repos/mySkills";
   for (const c of [
-    "/srv/nas/Project/mySkills/skills/backlog/scripts/backlog-skill",
-    "/srv/NAS/Project/mySkills/skills/backlog/scripts/backlog-skill",
-    "/Volumes/Nas/Project/mySkills/skills/backlog/scripts/backlog-skill",
+    path.join(skillsRoot, "skills/backlog/scripts/backlog-skill"),
+    "/srv/nas/repos/mySkills/skills/backlog/scripts/backlog-skill",
+    path.join(process.env.HOME || "", "repos/mySkills/skills/backlog/scripts/backlog-skill"),
   ]) {
     if (fs.existsSync(c)) return c;
   }
@@ -187,7 +191,7 @@ async function mapPool(items, concurrency, worker) {
 
 const REGISTRY_PATH =
   process.env.AGENTS_REGISTRY ||
-  "/srv/nas/Project/myBackLog/registry/agents.json";
+  "/srv/nas/stacks/agent/backlog-hub/registry/agents.json";
 
 function parsePeerMapEnv() {
   const raw = process.env.AUTOSCAN_PEER_MAP || "";
@@ -792,7 +796,10 @@ function listIdsSafe(status, assignee = ASSIGNEE) {
 }
 
 const REWRITE_DONE_MARKER = "rewrite:done";
-const DRAFTS_DIR = path.join(BACKLOG_CWD, ".backlog", "drafts");
+const DRAFTS_DIR = path.join(
+  BACKLOG_CWD,
+  "docs/archive/backlog-legacy/drafts"
+);
 
 /** Канон чеклиста фактов (doc-75/78): этапы в Acceptance Criteria (--check-ac). */
 const CANON_AC_STAGES_NORMAL = [
@@ -1749,13 +1756,13 @@ function runHardForTask(taskId) {
   return { hard, stub, card };
 }
 
-/** Resolve doc-N under .backlog/docs (same glob as backlog-skill find_doc_path). */
+/** Resolve doc-N under docs/specs (ex .backlog/docs). */
 function findDocPath(docId) {
   const m = String(docId || "")
     .toLowerCase()
     .match(/^doc-(\d+)$/);
   if (!m) return null;
-  const docsRoot = path.join(BACKLOG_CWD, ".backlog", "docs");
+  const docsRoot = path.join(BACKLOG_CWD, "docs", "specs");
   if (!fs.existsSync(docsRoot)) return null;
   const prefix = `doc-${m[1]} - `;
   const hits = [];
@@ -4233,8 +4240,8 @@ function mythingsHeaders() {
 function loadHouseRegistry() {
   const candidates = [
     process.env.BACKLOG_REGISTRY,
-    "/srv/nas/Project/myBackLog/registry/projects.json",
-    "/Volumes/Nas/Project/myBackLog/registry/projects.json",
+    "/srv/nas/stacks/agent/backlog-hub/registry/projects.json",
+    "/srv/nas/repos/myNAS/stacks/agent/backlog-hub/registry/projects.json",
   ].filter(Boolean);
   for (const p of candidates) {
     try {
@@ -4276,7 +4283,7 @@ function readBacklogConfigText() {
   try {
     return fs.readFileSync(p, "utf8");
   } catch {
-    return "";
+    return "task_prefix: MYMAC\n";
   }
 }
 

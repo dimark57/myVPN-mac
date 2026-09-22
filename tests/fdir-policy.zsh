@@ -120,7 +120,7 @@ print -r -- "$hdf" | /usr/bin/grep -q 'prev.nas && !nas' && bad "T23 NAS still h
 /usr/bin/grep -q 'timeout_no_vpn_channel\|timeout→mount-only' "${AP}" && pass "T25 timeout channel gate" || bad "T25 timeout channel gate"
 /usr/bin/grep -q 'maybeRemountNASAfterFlap\|HEAL_NAS flap=1' "${AD}" && pass "T26 NAS flap remount" || bad "T26 NAS flap remount"
 /usr/bin/grep -q 'connect-timeout' "${SS}" && pass "T27 L0 curl connect-timeout" || bad "T27 L0 curl connect-timeout"
-if ls "${ROOT}/.backlog/docs/specs"/doc-12* >/dev/null 2>&1; then
+if ls "${ROOT}/docs/specs"/doc-12* >/dev/null 2>&1; then
   pass "doc-12 present"
 else
   bad "doc-12 missing"
@@ -151,7 +151,7 @@ sleep_case="$(/usr/bin/awk '/case "SLEEP_WAKE_STALE"/{p=1;next} p{print; exit}' 
 print -r -- "$sleep_case" | /usr/bin/grep -q 'return \.restart$' && pass "T33 SLEEP_WAKE_STALE restart-only" || bad "T33 SLEEP_WAKE got: $sleep_case"
 print -r -- "$sleep_case" | /usr/bin/grep -q 'restartAndMount' && bad "T33 SLEEP still restartAndMount" || true
 
-if ls "${ROOT}/.backlog/docs/specs"/doc-13* >/dev/null 2>&1; then
+if ls "${ROOT}/docs/specs"/doc-13* >/dev/null 2>&1; then
   pass "T34 doc-13 present"
 else
   bad "T34 doc-13 missing"
@@ -254,7 +254,7 @@ AD="${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift"
 /usr/bin/grep -q 'timeout: 35' "${AD}" && pass "up/down UI timeout 35" || bad "up/down UI timeout 35"
 
 # --- doc-10 SoT ---
-if ls "${ROOT}/.backlog/docs/specs"/doc-10* >/dev/null 2>&1; then
+if ls "${ROOT}/docs/specs"/doc-10* >/dev/null 2>&1; then
   pass "doc-10 present"
 else
   bad "doc-10 missing"

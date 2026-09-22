@@ -98,7 +98,7 @@ card: MYMAC-6
 | C10 | `ping_nas` | `10.57.0.100` |
 | C11 | `endpoint_direct` | пиры `macbook=1` и `home=1` (handshake); при TUN `route get` к endpoint часто показывает utun — это норма, не FAIL |
 | C12 | `restore_app_macbook` | после цикла WireGuard.app MacBook Connected + есть интернет |
-| C13 | `mount_nas` | после up существует `/Volumes/Nas/Project` (или `/Volumes/Nas`) |
+| C13 | `mount_nas` | после up `myvpn status` → `nas=1` (SMB на `nas_mount` из settings, обычно `/Volumes/Nas`) |
 | C14 | `autostart_plist` | LaunchAgent установлен (`launchctl` list / plist в `~/Library/LaunchAgents`) — проверка после `install-autostart` |
 
 ## Живая машина (доп. L*)
@@ -141,6 +141,6 @@ card: MYMAC-6
 ## Отчёт
 
 - Цикл: `~/.cache/myvpn-cycle/latest.txt` (формат как Utilits: `OVERALL` + список PASS/FAIL)
-- Сдача задачи: `.backlog/artifacts/<TASK-ID>/test-report.md` со всеми ID
+- Сдача задачи: отчёт в notes/result карточки myTask (`MYMAC-*`) или `tests/` артефакт в PR
 
 Без pass/blocked по S* и C* этап CLI не в QA.
