@@ -7,7 +7,7 @@ enum MyVPNHelper {
     static let launchPlist = "/Library/LaunchDaemons/local.myvpn.mac.helper.plist"
 
     /// Must match HELPER_PROTO in myvpn_helperd.py (bump together when commands change).
-    static let requiredProtocol = 2
+    static let requiredProtocol = 3
 
     private static let dismissedProtoKey = "local.myvpn.mac.helper.dismissedProto"
 

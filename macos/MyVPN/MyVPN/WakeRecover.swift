@@ -105,7 +105,7 @@ enum WakeRecover {
                         )
                     }
                     do {
-                        try MyVPNCLI.mountNAS(force: false, safe: true)
+                        try MyVPNCLI.mountNAS(force: true, safe: true)
                         snap = MyVPNCLI.status(includePublicIP: false)
                         DropLogger.logEvent("WAKE_NAS ok=\(snap.nas ? 1 : 0)")
                         DispatchQueue.main.async {

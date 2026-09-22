@@ -19,7 +19,7 @@ MYVPN_ROOT = os.environ.get("MYVPN_ROOT", "")
 LOG_PATH = os.environ.get("MYVPN_HELPER_LOG", "/var/log/myvpn-helper.log")
 CMD_TIMEOUT = float(os.environ.get("MYVPN_HELPER_TIMEOUT", "45"))
 # Bump when allowed commands / behavior change — app prompts reinstall if running proto < required.
-HELPER_PROTO = 2
+HELPER_PROTO = 3
 
 _lock = threading.Lock()
 
@@ -46,6 +46,50 @@ def peer_uid(conn: socket.socket) -> int:
     if libc.getpeereid(conn.fileno(), ctypes.byref(uid), ctypes.byref(gid)) != 0:
         raise OSError(ctypes.get_errno(), "getpeereid failed")
     return int(uid.value)
+
+
+def _nas_mount_path() -> str:
+    settings_path = os.path.join(HOME, ".config/myvpn/settings.json")
+    mount = "/Volumes/Nas"
+    if os.path.isfile(settings_path):
+        try:
+            import json
+
+            with open(settings_path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            mount = str(data.get("nas_mount") or mount).strip() or mount
+        except (OSError, ValueError, TypeError):
+            pass
+    return mount
+
+
+def prepare_nas_mountpoint() -> tuple[int, str]:
+    mount = _nas_mount_path()
+    base = os.path.basename(mount.rstrip("/"))
+    vol = "/Volumes"
+    if base and os.path.isdir(vol):
+        try:
+            for name in os.listdir(vol):
+                if not name.startswith(f"{base}-"):
+                    continue
+                alt = os.path.join(vol, name)
+                if not os.path.isdir(alt):
+                    continue
+                try:
+                    os.rmdir(alt)
+                    log(f"nas-mkdir pruned {alt}")
+                except OSError:
+                    pass
+        except OSError as exc:
+            return 1, str(exc)
+    try:
+        os.makedirs(mount, mode=0o755, exist_ok=True)
+        uid = owner_uid()
+        gid = pwd.getpwnam(OWNER).pw_gid
+        os.chown(mount, uid, gid)
+    except OSError as exc:
+        return 1, str(exc)
+    return 0, f"ok {mount}"
 
 
 def run_myvpn(action: str) -> tuple[int, str]:
@@ -90,6 +134,12 @@ def handle(cmd: str) -> str:
         return "ok ready"
     if cmd in ("proto", "version"):
         return f"ok proto={HELPER_PROTO}"
+    if cmd == "nas-mkdir":
+        with _lock:
+            code, detail = prepare_nas_mountpoint()
+        if code == 0:
+            return detail if detail.startswith("ok") else f"ok {detail}"
+        return f"err {detail}"
     if cmd in ("up", "down", "pin-endpoints"):
         with _lock:
             code, detail = run_myvpn(cmd)

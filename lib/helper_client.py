@@ -44,7 +44,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="myVPN privileged helper client")
     parser.add_argument(
         "command",
-        choices=("ping", "up", "down", "proto", "version", "pin-endpoints"),
+        choices=("ping", "up", "down", "proto", "version", "pin-endpoints", "nas-mkdir"),
     )
     parser.add_argument("--timeout", type=float, default=180.0)
     args = parser.parse_args()

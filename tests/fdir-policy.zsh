@@ -159,8 +159,10 @@ fi
 
 
 # --- helper protocol 2 (app + daemon) ---
-/usr/bin/grep -q 'HELPER_PROTO = 2' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper HELPER_PROTO=2" || bad "helper HELPER_PROTO=2"
-/usr/bin/grep -q 'requiredProtocol = 2' "${ROOT}/macos/MyVPN/MyVPN/MyVPNHelper.swift" && pass "app requiredProtocol=2" || bad "app requiredProtocol=2"
+/usr/bin/grep -q 'HELPER_PROTO = 3' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper HELPER_PROTO=3" || bad "helper HELPER_PROTO=3"
+/usr/bin/grep -q 'requiredProtocol = 3' "${ROOT}/macos/MyVPN/MyVPN/MyVPNHelper.swift" && pass "app requiredProtocol=3" || bad "app requiredProtocol=3"
+/usr/bin/grep -q 'nas-mkdir' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper nas-mkdir" || bad "helper nas-mkdir"
+/usr/bin/grep -q 'myvpn_nas_timed_osascript_mount' "${ROOT}/lib/nas.zsh" && pass "nas osascript timeout" || bad "nas osascript timeout"
 /usr/bin/grep -q 'promptHelperUpgradeIfNeeded' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "helper upgrade prompt" || bad "helper upgrade prompt"
 
 # --- Swift FDIR modules exist ---
@@ -171,7 +173,7 @@ done
 # --- Fast up 0.5.13 ---
 /usr/bin/grep -q 'MYVPN_SKIP_AUTO_NAS' "${ROOT}/macos/MyVPN/helper/myvpn_helperd.py" && pass "helper SKIP_AUTO_NAS" || bad "helper SKIP_AUTO_NAS"
 /usr/bin/grep -q 'MYVPN_QUIET' "${ROOT}/bin/myvpn" && pass "bin/myvpn QUIET skip auto-nas" || bad "bin/myvpn QUIET skip auto-nas"
-/usr/bin/grep -q 'myvpn_cmd_mount_nas --safe' "${ROOT}/lib/nas.zsh" && pass "after_up --safe only" || bad "after_up --safe only"
+/usr/bin/grep -q 'extra=(--force)' "${ROOT}/lib/nas.zsh" && /usr/bin/grep -q 'myvpn_cmd_mount_nas "${extra\[@\]}" --safe' "${ROOT}/lib/nas.zsh" && pass "after_up force+safe" || bad "after_up force+safe"
 /usr/bin/grep -q 'UI_MOUNT skip=already_mounted' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI skip mount if live" || bad "UI skip mount if live"
 /usr/bin/grep -q 'timeout: 50' "${ROOT}/macos/MyVPN/MyVPN/AppDelegate.swift" && pass "UI up watchdog 50s" || bad "UI up watchdog 50s"
 

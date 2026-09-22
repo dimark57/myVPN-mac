@@ -624,7 +624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 // Helper up is tunnel-only — remount as a visible second phase.
                 self.runCommand(key: "mount-nas", work: "Монтирую NAS", timeout: AutoDoctor.mountUITimeout) {
-                    try MyVPNCLI.mountNAS(force: false, safe: true)
+                    try MyVPNCLI.mountNAS(force: true, safe: true)
                 } afterSuccess: { [weak self] in
                     self?.notify(
                         title: "myVPN ✓ Готово",
@@ -1048,7 +1048,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self.notify(title: "myVPN", body: "Монтирую NAS · \(DoctorStatus.nowStamp())", replacing: "auto-nas")
                         if self.menuIsOpen { self.rebuildMenu() }
                     }
-                    try? MyVPNCLI.mountNAS(force: false, safe: true)
+                    try? MyVPNCLI.mountNAS(force: true, safe: true)
                 }
                 let final = MyVPNCLI.status(includePublicIP: true)
                 DispatchQueue.main.async {
@@ -1340,7 +1340,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// doc-12 / 0.5.19: NAS 1→0 is no longer hard DROP. Remount only — never down→up.
     private func maybeRemountNASAfterFlap(from prev: StatusSnapshot, to next: StatusSnapshot) {
-        guard prev.nas, !next.nas else { return }
+        let lostNas = prev.nas && !next.nas
+        let tunnelUpNoNas = !prev.tun && next.tun && !next.nas && autoNASOn
+        guard lostNas || tunnelUpNoNas else { return }
         guard DesiredStateStore.desiredOn, !DesiredStateStore.isInGrace else { return }
         guard next.tun else { return }
         guard AutoDoctor.autoHealEnabled else { return }

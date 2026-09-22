@@ -70,6 +70,72 @@ myvpn_nas_clear_stale_mountpoint() {
   fi
 }
 
+# macOS may leave /Volumes/Nas-1 when /Volumes/Nas cannot be created — blocks remount.
+myvpn_nas_prune_empty_alt_volumes() {
+  local base="${MYVPN_NAS_MOUNT##*/}" alt
+  [[ -n "$base" ]] || return 0
+  setopt local_options null_glob
+  for alt in /Volumes/${base}-*; do
+    [[ -e "$alt" ]] || continue
+    /sbin/mount | /usr/bin/grep -q " on ${alt} " && continue
+    /bin/rmdir "$alt" 2>/dev/null && print -r -- "nas pruned empty ${alt}"
+  done
+}
+
+# Root helper creates /Volumes/* when user mkdir is denied (macOS 15+).
+myvpn_nas_helper_prepare_mountpoint() {
+  [[ "$(/usr/bin/id -u)" == "0" ]] && return 1
+  myvpn_helper_available || return 1
+  myvpn_via_helper nas-mkdir >/dev/null 2>&1
+}
+
+myvpn_nas_ensure_mountpoint() {
+  [[ -d "${MYVPN_NAS_MOUNT}" ]] && return 0
+  myvpn_nas_prune_empty_alt_volumes || true
+  /bin/mkdir -p "${MYVPN_NAS_MOUNT}" 2>/dev/null && return 0
+  myvpn_nas_helper_prepare_mountpoint || return 1
+  [[ -d "${MYVPN_NAS_MOUNT}" ]]
+}
+
+# osascript mount volume can hang forever on stale SMB — cap wall time for auto-heal.
+myvpn_nas_timed_osascript_mount() {
+  local url="$1" secs="${2:-20}"
+  /usr/bin/python3 -c '
+import subprocess, sys
+url, secs = sys.argv[1], int(sys.argv[2])
+try:
+    p = subprocess.Popen(
+        ["/usr/bin/osascript", "-e", f"mount volume \"{url}\""],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        p.wait(timeout=secs)
+        sys.exit(0 if p.returncode == 0 else 1)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        sys.exit(124)
+except Exception:
+    sys.exit(1)
+' "${url}" "${secs}"
+}
+
+myvpn_nas_try_smbfs_mount() {
+  local pw_enc="$1" pw_redact="$2" err
+  myvpn_nas_ensure_mountpoint || return 1
+  err="$(/sbin/mount_smbfs "//${MYVPN_NAS_USER}:${pw_enc}@${MYVPN_NAS_HOST}/${MYVPN_NAS_SHARE}" "${MYVPN_NAS_MOUNT}" 2>&1)" || {
+    err="${err//${pw_redact}/***}"
+    err="${err//${pw_enc}/***}"
+    print -r -- "mount_smbfs failed${err:+: ${err}}" >&2
+    return 1
+  }
+  myvpn_nas_in_mount_table || myvpn_nas_is_mounted
+}
+
 # Soft unmount first (Finder-friendly). Returns 0 if mount gone.
 myvpn_nas_graceful_unmount() {
   myvpn_nas_in_mount_table || return 0
@@ -184,16 +250,28 @@ myvpn_cmd_mount_nas() {
   fi
   pw_enc="$(myvpn_nas_urlencode "$pw")"
   myvpn_nas_clear_stale_mountpoint
+  myvpn_nas_ensure_mountpoint || true
 
-  # osascript uses our Keychain password (Finder open does not see local.myvpn.mac.nas).
-  if /usr/bin/osascript -e "mount volume \"smb://${MYVPN_NAS_USER}:${pw_enc}@${MYVPN_NAS_HOST}/${MYVPN_NAS_SHARE}\"" >/dev/null 2>&1; then
+  local smb_url="smb://${MYVPN_NAS_USER}:${pw_enc}@${MYVPN_NAS_HOST}/${MYVPN_NAS_SHARE}"
+
+  # Prefer smbfs when mountpoint exists — no Finder hang (auto-heal / wake).
+  if myvpn_nas_try_smbfs_mount "${pw_enc}" "${pw}"; then
+    print -r -- "nas mounted ${MYVPN_NAS_MOUNT} (smbfs)"
+    return 0
+  fi
+
+  # osascript uses Keychain password (Finder does not see local.myvpn.mac.nas).
+  local osa_rc=0
+  myvpn_nas_timed_osascript_mount "${smb_url}" 20 || osa_rc=$?
+  if (( osa_rc == 124 )); then
+    print -r -- "nas osascript mount timeout (20s) — retry smbfs" >&2
+  elif (( osa_rc == 0 )); then
     tries=0
     while (( tries < 20 )); do
       if myvpn_nas_in_mount_table && myvpn_nas_is_alive; then
         print -r -- "nas mounted ${MYVPN_NAS_MOUNT}"
         return 0
       fi
-      # Mount table alone after osascript is enough for UI (alive may timeout under Cursor).
       if myvpn_nas_in_mount_table && (( tries >= 3 )); then
         print -r -- "nas mounted ${MYVPN_NAS_MOUNT} (table)"
         return 0
@@ -204,18 +282,11 @@ myvpn_cmd_mount_nas() {
   fi
 
   myvpn_nas_clear_stale_mountpoint
-  /bin/mkdir -p "${MYVPN_NAS_MOUNT}" 2>/dev/null || true
-  err="$(/sbin/mount_smbfs "//${MYVPN_NAS_USER}:${pw_enc}@${MYVPN_NAS_HOST}/${MYVPN_NAS_SHARE}" "${MYVPN_NAS_MOUNT}" 2>&1)" || {
-    err="${err//${pw}/***}"
-    err="${err//${pw_enc}/***}"
-    print -r -- "mount-nas failed${err:+: ${err}} (check Keychain ${MYVPN_NAS_KEYCHAIN_SERVICE}/${MYVPN_NAS_USER})" >&2
-    return 1
-  }
-  if myvpn_nas_in_mount_table || myvpn_nas_is_mounted; then
-    print -r -- "nas mounted ${MYVPN_NAS_MOUNT}"
+  if myvpn_nas_try_smbfs_mount "${pw_enc}" "${pw}"; then
+    print -r -- "nas mounted ${MYVPN_NAS_MOUNT} (smbfs)"
     return 0
   fi
-  print -r -- "mount-nas failed: mounted but ${MYVPN_NAS_MOUNT}/Project missing" >&2
+  print -r -- "mount-nas failed (check Keychain ${MYVPN_NAS_KEYCHAIN_SERVICE}/${MYVPN_NAS_USER}, NAS SMB)" >&2
   return 1
 }
 
@@ -233,6 +304,13 @@ myvpn_after_up_remount_nas() {
     return 0
   fi
   print -r -- "auto-nas: remount after vpn up"
-  # --safe only: alive = no-op; stale tries soft remount, BUSY → skip force.
-  myvpn_cmd_mount_nas --safe || true
+  if myvpn_nas_is_mounted && myvpn_nas_is_alive; then
+    return 0
+  fi
+  local extra=()
+  if ! myvpn_nas_is_mounted; then
+    extra=(--force)
+  fi
+  # --safe: BUSY → skip force unmount; --force when nas=0 clears stale + smbfs path.
+  myvpn_cmd_mount_nas "${extra[@]}" --safe || true
 }
