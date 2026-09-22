@@ -38,8 +38,7 @@ Ship → навык **`cd`** (`macos-gh-app`).
 
 ## Задачи
 
-SoT: **myTask REST** (префикс `MYMAC`). Handoff/registry: `myNAS/stacks/agent/backlog-hub/registry/projects.json`.  
-Навык: `~/repos/mySkills/skills/mytask/`. Импорт с cutover: [data/mymac-mytask-import-payload.json](data/mymac-mytask-import-payload.json).
+SoT: **myTask REST** (префикс `MYMAC`, проект `myVPN-mac`). Чтение/перемещение карточек: навык **mytask-api** в репо **myTask** (`doc-29`), не `mySkills/skills/mytask`. Registry handoff: `myNAS/stacks/agent/backlog-hub/registry/projects.json`.
 
 ## Секреты
 

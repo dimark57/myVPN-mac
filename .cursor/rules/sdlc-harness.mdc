@@ -11,7 +11,7 @@ SoT задач: **myTask REST** (префикс `MYMAC`, проект `myVPN-mac
 
 | Ситуация | Инструмент |
 |----------|------------|
-| Задачи / очередь | навык **mytask** (`~/repos/mySkills/skills/mytask/`) |
+| Задачи / SDLC board | **mytask-api** (репо myTask, doc-29) |
 | Спеки | `docs/specs/` → при изменении кода |
 | Ship / релиз | навык **cd** (`macos-gh-app`) → `macos/MyVPN/ship.zsh --confirm` |
 | Пути NAS/Mac | навык **nas-layout** в mySkills |

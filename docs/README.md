@@ -24,5 +24,3 @@ SoT процесса: навыки **mySkills** (`~/repos/mySkills` на Mac).
 | doc-7 | UX списков RU |
 | doc-8 | Публичная дистрибуция |
 | doc-9–13 | FDIR / автодоктор |
-
-Импорт задач в myTask: [data/mymac-mytask-import-payload.json](../data/mymac-mytask-import-payload.json).
